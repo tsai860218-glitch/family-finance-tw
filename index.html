@@ -648,7 +648,7 @@ window.renderOverview=function(){
   }
 };
 
-function setOvView(v){ovView=v;renderSummaryCard();renderOverview();}
+window.setOvView=function(v){ovView=v;renderSummaryCard();renderOverview();};
 
 /* ══════════════════════════════
    年度盈餘
@@ -1108,6 +1108,125 @@ function closeModal(e,force){
     document.getElementById('modal_root').innerHTML='';
   }
 }
+
+window.chMonth=chMonth;
+window.goTab=goTab;
+window.setYrM=setYrM;
+window.setBudM=setBudM;
+window.checkBI=checkBI;
+window.updateBudget=updateBudget;
+window.refreshCatSel=refreshCatSel;
+window.addRecord=addRecord;
+window.renderAddForm=renderAddForm;
+window.renderRec=renderRec;
+window.delRecord=delRecord;
+window.openEditModal=openEditModal;
+window.refreshEditCat=refreshEditCat;
+window.saveEditRecord=saveEditRecord;
+window.closeModal=closeModal;
+window.renderMembers=renderMembers;
+window.toggleAP=toggleAP;
+window.setAv=setAv;
+window.updMName=updMName;
+window.delMember=delMember;
+window.addMember=addMember;
+window.initDraft=initDraft;
+window.toggleCatType=toggleCatType;
+window.updateCatNameDraft=updateCatNameDraft;
+window.setCatIconDraft=setCatIconDraft;
+window.deleteCatDraft=deleteCatDraft;
+window.addCat=addCat;
+window.confirmCatDraft=confirmCatDraft;
+window.cancelCatDraft=cancelCatDraft;
+window.dragStart=dragStart;
+window.dragOver=dragOver;
+window.dropOn=dropOn;
+window.dragEnd=dragEnd;
+window.toggleCIP=toggleCIP;
+window.showToast=showToast;
+window.renderBudget=renderBudget;
+window.renderYearly=renderYearly;
+/* ══ 快速記帳 ══ */
+function renderQuickGrid(){
+  const sel=document.getElementById('aPerson');
+  const mid=sel?sel.value:(window.members[0]?.id||'A');
+  const items=window.quickItems[mid]||[];
+  const el=document.getElementById('quick_grid');
+  if(!el) return;
+  el.innerHTML=items.map((q,i)=>`
+    <div class="quick-btn" onclick="applyQuick(${i},'${mid}')">
+      <button class="qb-del" onclick="event.stopPropagation();delQuick(${i},'${mid}')">×</button>
+      <span class="qb-icon">${q.icon||'💰'}</span>
+      <span class="qb-name">${q.name}</span>
+      <span class="qb-amt">-${fmt(q.amount)}</span>
+    </div>`).join('')+
+  `<button class="add-quick-btn" onclick="openAddQuickModal('${mid}')">＋ 新增常用</button>`;
+}
+window.renderQuickGrid=renderQuickGrid;
+
+function applyQuick(idx,mid){
+  const q=(window.quickItems[mid]||[])[idx]; if(!q) return;
+  const n=new Date();
+  const date=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+  window.fbAddRecord({type:'expense',person:mid,category:q.category,amount:q.amount,note:q.name,date});
+  showToast(`已記帳：${q.name} ${fmt(q.amount)}`);
+}
+window.applyQuick=applyQuick;
+
+function delQuick(idx,mid){
+  if(!window.quickItems[mid]) return;
+  window.quickItems[mid].splice(idx,1);
+  window.fbSaveQuickItems();
+  renderQuickGrid();
+}
+window.delQuick=delQuick;
+
+function openAddQuickModal(mid){
+  const catOpts=window.cats.map(c=>`<option value="${c.name}">${c.icon} ${c.name}</option>`).join('');
+  document.getElementById('modal_root').innerHTML=`
+    <div class="modal-bg" onclick="closeModal(event)">
+      <div class="modal-box">
+        <div class="modal-hd"><span class="modal-title">新增常用項目</span><button class="modal-close" onclick="closeModal(null,true)">×</button></div>
+        <div class="fr" style="grid-template-columns:1fr;margin-bottom:8px">
+          <div class="fg"><label>名稱（顯示在按鈕上）</label><input type="text" id="qq_name" placeholder="早餐、停車費..."></div>
+        </div>
+        <div class="fr">
+          <div class="fg"><label>金額（NT$）</label><input type="number" id="qq_amt" placeholder="0" min="0"></div>
+          <div class="fg"><label>分類</label><select id="qq_cat">${catOpts}</select></div>
+        </div>
+        <button class="btn pri" style="width:100%;margin-top:10px" onclick="confirmAddQuick('${mid}')">＋ 確認新增</button>
+      </div>
+    </div>`;
+}
+window.openAddQuickModal=openAddQuickModal;
+
+function confirmAddQuick(mid){
+  const name=document.getElementById('qq_name').value.trim();
+  const amount=parseFloat(document.getElementById('qq_amt').value)||0;
+  const category=document.getElementById('qq_cat').value;
+  if(!name||!amount){alert('請填寫名稱與金額');return;}
+  const cat=window.cats.find(c=>c.name===category);
+  if(!window.quickItems[mid]) window.quickItems[mid]=[];
+  window.quickItems[mid].push({name,amount,category,icon:cat?cat.icon:'💰'});
+  window.fbSaveQuickItems();
+  closeModal(null,true);
+  renderQuickGrid();
+  showToast('已新增常用項目！');
+}
+window.confirmAddQuick=confirmAddQuick;
+
+window.saveAsQuick=function saveAsQuick(){
+  const person=document.getElementById('aPerson').value;
+  const amount=parseFloat(document.getElementById('aAmt').value)||0;
+  const category=document.getElementById('aCat').value;
+  const note=document.getElementById('aNote').value.trim();
+  if(!amount||!note){alert('請填寫金額和備註，備註會做為常用名稱');return;}
+  const cat=window.cats.find(c=>c.name===category);
+  if(!window.quickItems[person]) window.quickItems[person]=[];
+  window.quickItems[person].push({name:note,amount,category,icon:cat?cat.icon:'💰'});
+  window.fbSaveQuickItems();
+  showToast('已加入常用！');
+};
 
 window.updateAll=function(){
   window.updateMonthLabel();
