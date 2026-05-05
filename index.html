@@ -465,6 +465,37 @@ function goTab(t){
 /* ══════════════════════════════
    總覽
 ══════════════════════════════ */
+/* ══ 月份摘要卡 ══ */
+function renderSummaryCard(){
+  const ym=ymKey(curMonth);
+  const allRecs=getMonthRecs('all');
+  const inc=allRecs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+  const exp=allRecs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+  const sur=inc-exp;
+  const prevD=new Date(curMonth.getFullYear(),curMonth.getMonth()-1,1);
+  const prevRecs=getRecsYM(prevD.getFullYear(),prevD.getMonth());
+  const prevSur=prevRecs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0)
+               -prevRecs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+  const diff=sur-prevSur;
+  const catSpent={};
+  allRecs.filter(r=>r.type==='expense').forEach(r=>{catSpent[r.category]=(catSpent[r.category]||0)+r.amount;});
+  const overCats=window.cats.filter(c=>{
+    const bgt=window.members.reduce((s,m)=>s+getBudget(ym,c.id,m.id),0);
+    return bgt>0&&(catSpent[c.name]||0)>bgt;
+  });
+  const surColor=sur>=0?'#4dd8a4':'#ff8866';
+  const el=document.getElementById('ov_summary');
+  if(!el) return;
+  el.innerHTML=`<div class="summary-card">
+    <div class="sc-title">${curMonth.getFullYear()} 年 ${curMonth.getMonth()+1} 月 · 本月盈餘</div>
+    <div class="sc-surplus" style="color:${surColor}">${sur>=0?'+':'-'}${fmt(Math.abs(sur))}</div>
+    <div class="sc-row"><span>收入 ${fmt(inc)}</span><span>支出 ${fmt(exp)}</span></div>
+    ${prevSur!==0?`<div class="sc-vs">與上月比較 ${diff>=0?'+':'-'}${fmt(Math.abs(diff))}</div>`:''}
+    ${overCats.length?`<div style="margin-top:10px">${overCats.map(c=>`<span class="ovr-badge">${c.icon} ${c.name} 超支</span>`).join('')}</div>`:''}
+  </div>`;
+}
+window.renderSummaryCard=renderSummaryCard;
+
 window.renderOverview=function(){
   const ym=ymKey(curMonth);
   ensureMonthBudget(ym);
