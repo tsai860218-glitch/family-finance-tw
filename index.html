@@ -75,6 +75,7 @@
   window.fbSaveMonthBudget = (ym,data)=> set(ref(db,`monthBudgets/${ym}`),data);
   window.fbAddRecord       = (rec)=>{ const k=push(ref(db,"records")).key; rec.id=k; set(ref(db,`records/${k}`),rec); };
   window.fbDelRecord       = (id)=> remove(ref(db,`records/${id}`));
+  window.fbUpdateRecord    = (id,data)=> set(ref(db,`records/${id}`),data);
   window.fbSaveQuickItems  = ()=> set(ref(db,"quickItems"), window.quickItems);
 
 </script>
@@ -284,6 +285,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 .modal-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
 .modal-title{font-size:16px;font-weight:500}
 .modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);padding:4px;line-height:1}
+/* ─ 視角切換 ─ */
+.view-toggle{display:flex;background:var(--surface2);border-radius:var(--radius-pill);padding:3px;margin-bottom:1rem;width:fit-content}
+.view-toggle-btn{padding:6px 18px;border-radius:var(--radius-pill);border:none;background:none;font-size:13px;cursor:pointer;font-family:inherit;color:var(--text2);transition:all .2s;white-space:nowrap}
+.view-toggle-btn.on{background:var(--surface);color:var(--text);font-weight:500;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.family-cat-row{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;box-shadow:var(--shadow)}
+.member-exp-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:6px}
+
 @media(max-width:500px){.fr.t3{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -399,7 +407,7 @@ const MZH=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月
 const MCOLS=['#7F77DD','#0f8a5f','#c94a20','#a06010','#1557a0','#b04070'];
 
 window.activeTab='ov'; let curMonth=new Date(), activeTab='ov', budMember=null, yrMember='all';
-let catDraft=null;
+let catDraft=null, ovView='personal'; // ovView: 'personal' | 'family'
 
 function fmt(n){return 'NT$'+Math.round(n).toLocaleString();}
 function fmtS(n){const a=Math.abs(Math.round(n));return(n<0?'-':'')+(a>=10000?(a/10000).toFixed(1)+'萬':a.toLocaleString());}
@@ -464,87 +472,183 @@ window.renderOverview=function(){
   const totalInc=allRecs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
   const totalExp=allRecs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
   const totalSur=totalInc-totalExp;
+  const totalBud=window.members.reduce((s,m)=>s+getMemberMonthBudget(ym,m.id),0);
 
+  /* 預算超支警示 */
   const overMems=window.members.filter(m=>{const inc=mIncome(m.id),bud=getMemberMonthBudget(ym,m.id);return inc>0&&bud>inc;});
   document.getElementById('ov_alert').innerHTML=overMems.length
     ?`<div class="al alw"><span class="ali">⚠️</span><div>${overMems.map(m=>`${m.avatar} ${m.name} 預算超出收入 ${fmt(getMemberMonthBudget(ym,m.id)-mIncome(m.id))}`).join('、')}</div></div>`:'';
 
-  const memberHTML=window.members.map((m,mi)=>{
-    const recs=getMonthRecs(m.id);
-    const inc=recs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
-    const exp=recs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
-    const bud=getMemberMonthBudget(ym,m.id), sur=inc-exp;
-    const color=MCOLS[mi%MCOLS.length];
-    const catSpent={};
-    recs.filter(r=>r.type==='expense').forEach(r=>{catSpent[r.category]=(catSpent[r.category]||0)+r.amount;});
+  /* 切換按鈕 */
+  const toggleHTML=`<div class="view-toggle">
+    <button class="view-toggle-btn ${ovView==='personal'?'on':''}" onclick="setOvView('personal')">👤 個人</button>
+    <button class="view-toggle-btn ${ovView==='family'?'on':''}" onclick="setOvView('family')">🏠 家庭</button>
+  </div>`;
 
-    const renderGroup=(groupCats,groupLabel,badgeCls)=>{
-      const active=groupCats.filter(c=>getBudget(ym,c.id,m.id)>0||catSpent[c.name]);
+  if(ovView==='personal'){
+    /* ── 個人視角：各成員獨立卡片含明細 ── */
+    const memberHTML=window.members.map((m,mi)=>{
+      const recs=getMonthRecs(m.id);
+      const inc=recs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+      const exp=recs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+      const bud=getMemberMonthBudget(ym,m.id), sur=inc-exp;
+      const color=MCOLS[mi%MCOLS.length];
+      const catSpent={};
+      recs.filter(r=>r.type==='expense').forEach(r=>{catSpent[r.category]=(catSpent[r.category]||0)+r.amount;});
+
+      const renderGroup=(groupCats,groupLabel,badgeCls)=>{
+        const active=groupCats.filter(c=>getBudget(ym,c.id,m.id)>0||catSpent[c.name]);
+        if(!active.length) return '';
+        const rows=active.map(c=>{
+          const spent=catSpent[c.name]||0, bgt=getBudget(ym,c.id,m.id);
+          const pct=bgt>0?Math.min(spent/bgt*100,100):0;
+          const over=bgt>0&&spent>bgt;
+          const bc=over?'var(--red)':pct>80?'var(--amber)':color;
+          return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span style="font-size:16px;width:22px;text-align:center;flex-shrink:0">${c.icon}</span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+                <span style="font-size:13px;color:var(--text)">${c.name}</span>
+                <span style="font-size:11px;color:${over?'var(--red)':'var(--text2)'}">${bgt>0?(over?'超 '+fmt(Math.abs(bgt-spent)):'餘 '+fmt(bgt-spent)):'未設預算'}</span>
+              </div>
+              <div class="pw"><div class="pb" style="width:${pct}%;background:${bc}"></div></div>
+              <div style="display:flex;justify-content:space-between;margin-top:3px">
+                <span style="font-size:11px;color:var(--text3)">已用 ${fmt(spent)}</span>
+                ${bgt>0?`<span style="font-size:11px;color:var(--text3)">預算 ${fmt(bgt)}</span>`:''}
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+        return `<div style="margin-bottom:12px">
+          <div style="margin-bottom:8px"><span class="badge ${badgeCls}">${groupLabel}</span></div>
+          ${rows}
+        </div>`;
+      };
+
+      const budPct=bud>0&&inc>0?Math.min(exp/bud*100,100):0;
+      const budColor=bud>inc&&inc>0?'var(--red)':budPct>85?'var(--amber)':color;
+      const fixedHTML=renderGroup(fixedCats(window.cats),'固定支出','badge-fixed');
+      const varHTML=renderGroup(varCats(window.cats),'不固定支出','badge-var');
+      const hasAny=fixedHTML||varHTML;
+
+      return `<div class="card card-accent" style="border-left-color:${color}">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="width:44px;height:44px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${m.avatar}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px;font-weight:500;margin-bottom:5px;color:var(--text)">${m.name}</div>
+            <div style="display:flex;gap:14px;font-size:12px;flex-wrap:wrap">
+              <span style="color:var(--green)">收入 ${fmt(inc)}</span>
+              <span style="color:var(--red)">支出 ${fmt(exp)}</span>
+              <span style="color:${sur>=0?'var(--green)':'var(--red)'};font-weight:500">${sur>=0?'盈餘':'虧損'} ${fmt(Math.abs(sur))}</span>
+            </div>
+          </div>
+        </div>
+        ${bud>0?`<div style="margin-bottom:14px;padding:10px 12px;background:var(--surface2);border-radius:8px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--text2)">預算使用 ${fmt(exp)} / ${fmt(bud)}</span>
+            <span style="font-size:11px;font-weight:500;color:${budColor}">${Math.round(exp/(bud||1)*100)}%</span>
+          </div>
+          <div class="pw"><div class="pb" style="width:${budPct}%;background:${budColor}"></div></div>
+        </div>`:''}
+        ${hasAny?fixedHTML+varHTML:`<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px 0">本月無支出記錄</div>`}
+      </div>`;
+    }).join('');
+
+    document.getElementById('ov_body').innerHTML=toggleHTML+memberHTML;
+
+  } else {
+    /* ── 家庭視角：分類合計進度 + 成員總額 ── */
+
+    /* 全家摘要數字 */
+    const budPct=totalBud>0?Math.min(totalExp/totalBud*100,100):0;
+    const budColor=totalExp>totalBud&&totalBud>0?'var(--red)':budPct>85?'var(--amber)':'var(--green)';
+
+    const summaryHTML=`
+      <div class="sgrid" style="margin-bottom:1rem">
+        <div class="met"><div class="ml">家庭總收入</div><div class="mv g">${fmt(totalInc)}</div></div>
+        <div class="met"><div class="ml">家庭總支出</div><div class="mv r">${fmt(totalExp)}</div></div>
+        <div class="met"><div class="ml">預算總額</div><div class="mv b">${fmt(totalBud)}</div></div>
+        <div class="met"><div class="ml">${totalSur>=0?'家庭盈餘':'家庭虧損'}</div><div class="mv ${totalSur>=0?'g':'r'}">${fmt(Math.abs(totalSur))}</div></div>
+      </div>
+      <div style="padding:12px 14px;background:var(--surface2);border-radius:var(--radius);margin-bottom:1.25rem">
+        <div style="display:flex;justify-content:space-between;margin-bottom:7px">
+          <span style="font-size:12px;color:var(--text2)">預算整體使用進度</span>
+          <span style="font-size:13px;font-weight:500;color:${budColor}">${fmt(totalExp)} / ${fmt(totalBud)} (${totalBud>0?Math.round(totalExp/totalBud*100):0}%)</span>
+        </div>
+        <div class="btrack"><div class="bfill" style="width:${budPct}%;background:${budColor}"></div></div>
+      </div>`;
+
+    /* 各分類合計 */
+    const allCatSpent={};
+    allRecs.filter(r=>r.type==='expense').forEach(r=>{allCatSpent[r.category]=(allCatSpent[r.category]||0)+r.amount;});
+
+    const renderFamilyGroup=(groupCats,groupLabel,badgeCls)=>{
+      const active=groupCats.filter(c=>{
+        const totalBgtCat=window.members.reduce((s,m)=>s+getBudget(ym,c.id,m.id),0);
+        return totalBgtCat>0||(allCatSpent[c.name]||0)>0;
+      });
       if(!active.length) return '';
       const rows=active.map(c=>{
-        const spent=catSpent[c.name]||0, bgt=getBudget(ym,c.id,m.id);
+        const spent=allCatSpent[c.name]||0;
+        const bgt=window.members.reduce((s,m)=>s+getBudget(ym,c.id,m.id),0);
         const pct=bgt>0?Math.min(spent/bgt*100,100):0;
         const over=bgt>0&&spent>bgt;
-        const bc=over?'var(--red)':pct>80?'var(--amber)':color;
-        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <span style="font-size:16px;width:22px;text-align:center;flex-shrink:0">${c.icon}</span>
+        const bc=over?'var(--red)':pct>80?'var(--amber)':'var(--blue)';
+        return `<div class="family-cat-row">
+          <span style="font-size:20px;width:26px;text-align:center;flex-shrink:0">${c.icon}</span>
           <div style="flex:1;min-width:0">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-              <span style="font-size:13px;color:var(--text)">${c.name}</span>
-              <span style="font-size:11px;color:${over?'var(--red)':'var(--text2)'}">${bgt>0?(over?'超 '+fmt(Math.abs(bgt-spent)):'餘 '+fmt(bgt-spent)):'未設預算'}</span>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+              <span style="font-size:14px;color:var(--text)">${c.name}</span>
+              <span style="font-size:12px;color:${over?'var(--red)':'var(--text2)'}">
+                ${bgt>0?(over?'超支 '+fmt(Math.abs(bgt-spent)):'餘 '+fmt(bgt-spent)):''}
+              </span>
             </div>
-            <div class="pw"><div class="pb" style="width:${pct}%;background:${bc}"></div></div>
-            <div style="display:flex;justify-content:space-between;margin-top:3px">
-              <span style="font-size:11px;color:var(--text3)">已用 ${fmt(spent)}</span>
-              ${bgt>0?`<span style="font-size:11px;color:var(--text3)">預算 ${fmt(bgt)}</span>`:''}
+            <div class="pw" style="height:6px"><div class="pb" style="height:6px;width:${pct}%;background:${bc}"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:4px">
+              <span style="font-size:11px;color:var(--text3)">支出 ${fmt(spent)}</span>
+              ${bgt>0?`<span style="font-size:11px;color:var(--text3)">預算 ${fmt(bgt)}</span>`:'<span style="font-size:11px;color:var(--text3)">未設預算</span>'}
             </div>
           </div>
         </div>`;
       }).join('');
-      return `<div style="margin-bottom:12px">
-        <div style="margin-bottom:8px"><span class="badge ${badgeCls}">${groupLabel}</span></div>
+      return `<div style="margin-bottom:1.25rem">
+        <div class="sh-row" style="margin-top:0"><span class="sh">${groupLabel}</span><span class="badge ${badgeCls}">${active.length} 項</span></div>
         ${rows}
       </div>`;
     };
 
-    const budPct=bud>0&&inc>0?Math.min(exp/bud*100,100):0;
-    const budColor=bud>inc&&inc>0?'var(--red)':budPct>85?'var(--amber)':color;
-    const fixedHTML=renderGroup(fixedCats(window.cats),'固定支出','badge-fixed');
-    const varHTML=renderGroup(varCats(window.cats),'不固定支出','badge-var');
-    const hasAny=fixedHTML||varHTML;
+    const fcHTML=renderFamilyGroup(fixedCats(window.cats),'固定支出','badge-fixed');
+    const vcHTML=renderFamilyGroup(varCats(window.cats),'不固定支出','badge-var');
 
-    return `<div class="card card-accent" style="border-left-color:${color}">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-        <div style="width:44px;height:44px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${m.avatar}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:15px;font-weight:500;margin-bottom:5px;color:var(--text)">${m.name}</div>
-          <div style="display:flex;gap:14px;font-size:12px;flex-wrap:wrap">
-            <span style="color:var(--green)">收入 ${fmt(inc)}</span>
-            <span style="color:var(--red)">支出 ${fmt(exp)}</span>
-            <span style="color:${sur>=0?'var(--green)':'var(--red)'};font-weight:500">${sur>=0?'盈餘':'虧損'} ${fmt(Math.abs(sur))}</span>
+    /* 各成員支出總額（不含明細） */
+    const memberSummary=`
+      <hr class="divider">
+      <div class="sh">成員支出總覽</div>
+      ${window.members.map((m,mi)=>{
+        const mExp=getMonthRecs(m.id).filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+        const mBud=getMemberMonthBudget(ym,m.id);
+        const mPct=mBud>0?Math.min(mExp/mBud*100,100):0;
+        const color=MCOLS[mi%MCOLS.length];
+        const mColor=mExp>mBud&&mBud>0?'var(--red)':mPct>85?'var(--amber)':color;
+        return `<div class="member-exp-row">
+          <div style="width:36px;height:36px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${m.avatar}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+              <span style="font-size:13px;font-weight:500;color:var(--text)">${m.name}</span>
+              <span style="font-size:13px;color:var(--red)">${fmt(mExp)}</span>
+            </div>
+            ${mBud>0?`<div class="pw" style="height:4px"><div class="pb" style="height:4px;width:${mPct}%;background:${mColor}"></div></div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">預算 ${fmt(mBud)} · 使用 ${Math.round(mExp/(mBud||1)*100)}%</div>`
+            :'<div style="font-size:10px;color:var(--text3)">未設預算</div>'}
           </div>
-        </div>
-      </div>
-      ${bud>0?`<div style="margin-bottom:14px;padding:10px 12px;background:var(--surface2);border-radius:8px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <span style="font-size:11px;color:var(--text2)">預算使用 ${fmt(exp)} / ${fmt(bud)}</span>
-          <span style="font-size:11px;font-weight:500;color:${budColor}">${Math.round(exp/(bud||1)*100)}%</span>
-        </div>
-        <div class="pw"><div class="pb" style="width:${budPct}%;background:${budColor}"></div></div>
-      </div>`:''}
-      ${hasAny?fixedHTML+varHTML:`<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px 0">本月無支出記錄</div>`}
-    </div>`;
-  }).join('');
+        </div>`;
+      }).join('')}`;
 
-  document.getElementById('ov_body').innerHTML=memberHTML+`
-    <hr class="divider">
-    <div class="sh">全家合計</div>
-    <div class="sgrid">
-      <div class="met"><div class="ml">總收入</div><div class="mv g">${fmt(totalInc)}</div></div>
-      <div class="met"><div class="ml">總支出</div><div class="mv r">${fmt(totalExp)}</div></div>
-      <div class="met" style="grid-column:span 2"><div class="ml">${totalSur>=0?'家庭盈餘':'家庭虧損'}</div><div class="mv ${totalSur>=0?'g':'r'}" style="font-size:26px">${fmt(Math.abs(totalSur))}</div></div>
-    </div>`;
+    document.getElementById('ov_body').innerHTML=toggleHTML+summaryHTML+fcHTML+vcHTML+memberSummary;
+  }
 };
+
+function setOvView(v){ovView=v;renderSummaryCard();renderOverview();}
 
 /* ══════════════════════════════
    年度盈餘
@@ -767,18 +871,229 @@ function renderRec(){
     const mem=window.members.find(m=>m.id===r.person);
     const cat=window.cats.find(c=>c.name===r.category);
     const icon=isI?'💰':(cat?cat.icon:'📝');
-    return `<div class="rrow">
+    return `<div class="rrow" onclick="openEditModal('${r.id}')" style="cursor:pointer">
       <div style="font-size:18px;width:26px;text-align:center;flex-shrink:0">${icon}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hi(r.category)}${r.note?` · <span style="color:var(--text2)">${hi(r.note)}</span>`:''}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:3px">${mem?mem.avatar+' '+mem.name:r.person} · ${r.date} <span class="tag ${isI?'ti':'te'}">${isI?'收入':'支出'}</span></div>
       </div>
-      <div style="font-size:15px;font-weight:500;flex-shrink:0;color:${isI?'var(--green)':'var(--red)'}">${isI?'+':'-'}${fmt(r.amount)}</div>
-      <button class="rdel" onclick="delRecord('${r.id}')">×</button>
+      <div style="font-size:15px;font-weight:500;flex-shrink:0;color:${isI?'var(--green)':'var(--red)'};margin-right:4px">${isI?'+':'-'}${fmt(r.amount)}</div>
+      <span style="color:var(--text3);font-size:13px">›</span>
     </div>`;
   }).join('');
 }
-function delRecord(id){if(!confirm('確定刪除？'))return;window.fbDelRecord(id);}
+function delRecord(id){
+  if(!confirm('確定刪除？'))return;
+  window.fbDelRecord(id);
+  closeModal(null,true);
+}
+
+function openEditModal(id){
+  const r=window.records.find(x=>x.id===id); if(!r) return;
+  const isI=r.type==='income';
+  const memOpts=window.members.map(m=>`<option value="${m.id}" ${m.id===r.person?'selected':''}>${m.avatar} ${m.name}</option>`).join('');
+  const incCatOpts=INCOME_CATS.map(c=>`<option value="${c}" ${c===r.category?'selected':''}>${c}</option>`).join('');
+  const expCatOpts=window.cats.map(c=>`<option value="${c.name}" ${c.name===r.category?'selected':''}>${c.icon} ${c.name}</option>`).join('');
+  const fc=fixedCats(window.cats), vc=varCats(window.cats);
+  const expOptGroup=`<optgroup label="── 固定支出 ──">${fc.map(c=>`<option value="${c.name}" ${c.name===r.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</optgroup><optgroup label="── 不固定支出 ──">${vc.map(c=>`<option value="${c.name}" ${c.name===r.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</optgroup>`;
+
+  document.getElementById('modal_root').innerHTML=`
+    <div class="modal-bg" onclick="closeModal(event)">
+      <div class="modal-box">
+        <div class="modal-hd">
+          <span class="modal-title">編輯記帳</span>
+          <button class="modal-close" onclick="closeModal(null,true)">×</button>
+        </div>
+        <div class="fr t3" style="margin-bottom:10px">
+          <div class="fg"><label>類型</label>
+            <select id="e_type" onchange="refreshEditCat('${id}')">
+              <option value="expense" ${!isI?'selected':''}>支出</option>
+              <option value="income" ${isI?'selected':''}>收入</option>
+            </select>
+          </div>
+          <div class="fg"><label>成員</label><select id="e_person">${memOpts}</select></div>
+          <div class="fg"><label>金額（NT$）</label><input type="number" id="e_amt" value="${r.amount}" min="0"></div>
+        </div>
+        <div class="fr" style="margin-bottom:10px">
+          <div class="fg"><label>分類</label><select id="e_cat">${isI?incCatOpts:expOptGroup}</select></div>
+          <div class="fg"><label>日期</label><input type="date" id="e_date" value="${r.date}"></div>
+        </div>
+        <div class="fg" style="margin-bottom:14px">
+          <label>備註</label>
+          <input type="text" id="e_note" value="${r.note||''}" placeholder="說明...">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn pri" style="flex:1" onclick="saveEditRecord('${id}')">儲存</button>
+          <button class="btn del" onclick="delRecord('${id}')">刪除</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function refreshEditCat(id){
+  const type=document.getElementById('e_type').value;
+  const r=window.records.find(x=>x.id===id)||{};
+  const fc=fixedCats(window.cats), vc=varCats(window.cats);
+  const sel=document.getElementById('e_cat');
+  if(type==='income'){
+    sel.innerHTML=INCOME_CATS.map(c=>`<option value="${c}" ${c===r.category?'selected':''}>${c}</option>`).join('');
+  } else {
+    sel.innerHTML=`<optgroup label="── 固定支出 ──">${fc.map(c=>`<option value="${c.name}" ${c.name===r.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</optgroup><optgroup label="── 不固定支出 ──">${vc.map(c=>`<option value="${c.name}" ${c.name===r.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</optgroup>`;
+  }
+}
+
+function saveEditRecord(id){
+  const r=window.records.find(x=>x.id===id); if(!r) return;
+  const type=document.getElementById('e_type').value;
+  const person=document.getElementById('e_person').value;
+  const amount=parseFloat(document.getElementById('e_amt').value)||0;
+  const category=document.getElementById('e_cat').value;
+  const date=document.getElementById('e_date').value;
+  const note=document.getElementById('e_note').value.trim();
+  if(!amount){alert('請輸入金額');return;}
+  const updated={...r, type, person, amount, category, date, note};
+  window.fbUpdateRecord(id, updated);
+  closeModal(null,true);
+  showToast('已更新！');
+}
+
+/* ══ 成員設定 + 分類管理 ══ */
+function renderMembers(){
+  /* 成員卡片 */
+  document.getElementById('mem_cards').innerHTML=window.members.map((m,mi)=>{
+    const color=MCOLS[mi%MCOLS.length];
+    return `<div class="card card-accent" style="border-left-color:${color}">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div style="width:44px;height:44px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;cursor:pointer" onclick="toggleAP('${m.id}')">${m.avatar}</div>
+        <div style="flex:1">
+          <input class="ne" value="${m.name}" onchange="updMName('${m.id}',this.value)">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">點頭像換圖示 · 點名稱編輯</div>
+        </div>
+        ${window.members.length>1?`<button class="btn del sm" onclick="delMember('${m.id}')">刪除</button>`:''}
+      </div>
+      <div id="ap_${m.id}" style="display:none" class="apick">
+        ${AVOPT.map(a=>`<span class="ao ${a===m.avatar?'sel':''}" onclick="setAv('${m.id}','${a}')">${a}</span>`).join('')}
+      </div>
+    </div>`;
+  }).join('')+`<button class="btn" onclick="addMember()" style="margin-top:4px">＋ 新增成員</button>`;
+
+  /* 排序確認列 */
+  document.getElementById('cat_sort_bar').innerHTML=catDraft
+    ?`<div class="sort-confirm-bar">
+        <span>排序編輯中，完成後請確定儲存</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn sm" onclick="cancelCatDraft()" style="background:none;border-color:rgba(255,255,255,.3);color:#fff">取消</button>
+          <button class="btn sm pri" onclick="confirmCatDraft()">確定儲存</button>
+        </div>
+      </div>`:'';
+
+  /* 分類列表 */
+  const working=catDraft?catDraft:sortedCats(window.cats);
+  document.getElementById('cat_list').innerHTML=working.map((c,i)=>`
+    <div class="cat-item" id="ci_${c.id}" draggable="true"
+      ondragstart="dragStart(event,'${c.id}')"
+      ondragover="dragOver(event,'${c.id}')"
+      ondrop="dropOn(event,'${c.id}')"
+      ondragend="dragEnd(event)">
+      <span class="drag-handle">☰</span>
+      <span style="font-size:20px;cursor:pointer" onclick="toggleCIP('${c.id}')">${c.icon}</span>
+      <input class="cni" value="${c.name}" onchange="updateCatNameDraft('${c.id}',this.value)">
+      <span class="type-badge ${c.type==='fixed'?'fixed':'variable'}" onclick="toggleCatType('${c.id}')">${c.type==='fixed'?'固定':'不固定'}</span>
+      <button class="btn del sm" onclick="deleteCatDraft('${c.id}')">刪除</button>
+    </div>
+    <div id="cip_${c.id}" style="display:none;padding:0 8px 8px">
+      <div class="ipick"><div class="igrid">${CICONS.map(ic=>`<span class="io ${ic===c.icon?'sel':''}" onclick="setCatIconDraft('${c.id}','${ic}')">${ic}</span>`).join('')}</div></div>
+    </div>`).join('');
+}
+
+/* 成員操作 */
+function toggleAP(id){
+  const el=document.getElementById('ap_'+id),open=el.style.display==='none';
+  document.querySelectorAll('.apick').forEach(e=>e.style.display='none');
+  if(open)el.style.display='flex';
+}
+function setAv(id,av){const m=window.members.find(x=>x.id===id);if(m){m.avatar=av;window.fbSaveMembers();renderMembers();}}
+function updMName(id,val){const m=window.members.find(x=>x.id===id);if(m){m.name=val.trim()||m.name;window.fbSaveMembers();}}
+function delMember(id){
+  if(window.members.length<=1){alert('至少保留一位成員');return;}
+  if(!confirm('確定刪除此成員？'))return;
+  window.members=window.members.filter(x=>x.id!==id);
+  window.fbSaveMembers();renderMembers();
+}
+function addMember(){
+  window.members.push({id:'M'+Date.now(),name:'新成員',avatar:'🐹'});
+  window.fbSaveMembers();renderMembers();
+}
+
+/* 分類草稿操作 */
+function initDraft(){if(!catDraft) catDraft=sortedCats(window.cats).map(c=>({...c}));}
+function toggleCatType(id){
+  initDraft();
+  const c=catDraft.find(x=>x.id===id);if(!c)return;
+  c.type=c.type==='fixed'?'variable':'fixed';
+  renderMembers();
+}
+function updateCatNameDraft(id,val){
+  initDraft();
+  const c=catDraft.find(x=>x.id===id);if(!c)return;
+  c.name=val.trim()||c.name;
+}
+function setCatIconDraft(id,icon){
+  initDraft();
+  const c=catDraft.find(x=>x.id===id);if(!c)return;
+  c.icon=icon;
+  document.querySelectorAll('.ipick').forEach(e=>e.style.display='none');
+  renderMembers();
+}
+function deleteCatDraft(id){
+  if(!confirm('確定刪除此分類？'))return;
+  initDraft();
+  catDraft=catDraft.filter(x=>x.id!==id);
+  catDraft.forEach((c,i)=>c.order=i);
+  renderMembers();
+}
+function addCat(type){
+  initDraft();
+  const id='c'+Date.now();
+  catDraft.push({id,icon:'💰',name:'新分類',type:type||'variable',order:catDraft.length});
+  renderMembers();
+  setTimeout(()=>{const el=document.getElementById('ci_'+id);if(el)el.scrollIntoView({behavior:'smooth'});},60);
+}
+function confirmCatDraft(){
+  if(!catDraft)return;
+  window.cats=catDraft;
+  catDraft=null;
+  window.fbSaveCats();
+  renderMembers();
+  showToast('分類已儲存！');
+}
+function cancelCatDraft(){catDraft=null;renderMembers();}
+
+/* 拖曳排序 */
+let dragId=null;
+function dragStart(e,id){dragId=id;e.currentTarget.classList.add('dragging');}
+function dragOver(e,id){e.preventDefault();if(id!==dragId)document.getElementById('ci_'+id)?.classList.add('drag-over');}
+function dropOn(e,id){
+  e.preventDefault();
+  if(!dragId||id===dragId)return;
+  if(!catDraft) catDraft=sortedCats(window.cats).map(c=>({...c}));
+  const fromIdx=catDraft.findIndex(c=>c.id===dragId);
+  const toIdx=catDraft.findIndex(c=>c.id===id);
+  if(fromIdx<0||toIdx<0)return;
+  const [item]=catDraft.splice(fromIdx,1);
+  catDraft.splice(toIdx,0,item);
+  catDraft.forEach((c,i)=>c.order=i);
+  renderMembers();
+}
+function dragEnd(e){
+  dragId=null;
+  document.querySelectorAll('.cat-item').forEach(el=>el.classList.remove('dragging','drag-over'));
+}
+function toggleCIP(id){
+  const el=document.getElementById('cip_'+id),open=el.style.display==='none';
+  document.querySelectorAll('[id^="cip_"]').forEach(e=>e.style.display='none');
+  if(open)el.style.display='block';
+}
 
 /* ══ 工具 ══ */
 function showToast(msg){
