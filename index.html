@@ -1481,36 +1481,34 @@ function renderCatChart(yrMember){
 window.renderCatChart=renderCatChart;
 
 /* ══════════════════════════════
-   盈餘池
+   盈餘池（依月份分組）
 ══════════════════════════════ */
-let poolView='family'; // 'family' | member id
+let poolView='family';
 
 function renderPool(){
-  const sp=window.surplusPool;
   const tabs=`<button class="pool-tab ${poolView==='family'?'on':''}" onclick="setPoolView('family')">🏠 家庭共用</button>`
     +window.members.map(m=>`<button class="pool-tab ${poolView===m.id?'on':''}" onclick="setPoolView('${m.id}')">${m.avatar} ${m.name}</button>`).join('');
   document.getElementById('pool_tabs').innerHTML=tabs;
 
-  if(poolView==='family'){
-    renderPoolSection('family', '家庭共用池', '🏠', null);
-  } else {
-    const mem=window.members.find(m=>m.id===poolView);
-    renderPoolSection('member_'+poolView, mem?mem.name:'個人', mem?mem.avatar:'👤', poolView);
-  }
-}
-window.renderPool=renderPool;
+  const isFamily=poolView==='family';
+  const mem=isFamily?null:window.members.find(m=>m.id===poolView);
+  const icon=isFamily?'🏠':(mem?mem.avatar:'👤');
+  const title=isFamily?'家庭共用池':(mem?mem.name:'個人');
+  const key=isFamily?'family':'member_'+poolView;
+  const memberId=isFamily?null:poolView;
 
-function renderPoolSection(key, title, icon, memberId){
   const sp=window.surplusPool;
-  const txList = key==='family' ? (sp.family||[]) : (sp.members&&sp.members[memberId]||[]);
-  const balance = txList.reduce((s,tx)=>s+(tx.type==='in'?tx.amount:-tx.amount),0);
+  const txList=isFamily?(sp.family||[]):((sp.members&&sp.members[poolView])||[]);
 
-  // 本月盈餘（可快速存入）
+  // 累計總餘額
+  const totalBalance=txList.reduce((s,tx)=>s+(tx.type==='in'?tx.amount:-tx.amount),0);
+
+  // 本月盈餘建議
   let suggestSurplus=0;
-  if(key==='family'){
-    const allRecs=getMonthRecs('all');
-    const inc=allRecs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
-    const exp=allRecs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+  if(isFamily){
+    const recs=getMonthRecs('all');
+    const inc=recs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+    const exp=recs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
     suggestSurplus=Math.max(0,inc-exp);
   } else if(memberId){
     const recs=getMonthRecs(memberId);
@@ -1519,41 +1517,79 @@ function renderPoolSection(key, title, icon, memberId){
     suggestSurplus=Math.max(0,inc-exp);
   }
 
-  const txHTML = txList.length
-    ? [...txList].reverse().map((tx,ri)=>{
-        const i=txList.length-1-ri;
-        return `<div class="pool-tx-row">
-          <div class="pool-tx-dot ${tx.type==='in'?'pool-tx-in':'pool-tx-out'}"></div>
-          <div class="pool-tx-info">
-            <div class="pool-tx-note">${tx.note||'—'}</div>
-            <div class="pool-tx-date">${tx.date}</div>
+  // 依月份分組
+  const byMonth={};
+  txList.forEach((tx,i)=>{
+    const ym=tx.date?tx.date.slice(0,7):ymKey(curMonth);
+    if(!byMonth[ym]) byMonth[ym]=[];
+    byMonth[ym].push({...tx,_idx:i});
+  });
+  const sortedMonths=Object.keys(byMonth).sort((a,b)=>b.localeCompare(a));
+
+  // 逐月盈虧累計（從舊到新）
+  const monthBalance={};
+  let running=0;
+  Object.keys(byMonth).sort().forEach(ym=>{
+    byMonth[ym].forEach(tx=>{running+=tx.type==='in'?tx.amount:-tx.amount;});
+    monthBalance[ym]=running;
+  });
+
+  const monthlyHTML = sortedMonths.length ? sortedMonths.map(ym=>{
+    const [y,m]=ym.split('-');
+    const label=`${y} 年 ${parseInt(m)} 月`;
+    const txs=byMonth[ym];
+    const mIn=txs.filter(t=>t.type==='in').reduce((s,t)=>s+t.amount,0);
+    const mOut=txs.filter(t=>t.type==='out').reduce((s,t)=>s+t.amount,0);
+    const mBal=mIn-mOut;
+    const cumBal=monthBalance[ym];
+    const rows=txs.map(tx=>`
+      <div class="pool-tx-row">
+        <div class="pool-tx-dot ${tx.type==='in'?'pool-tx-in':'pool-tx-out'}"></div>
+        <div class="pool-tx-info">
+          <div class="pool-tx-note">${tx.note||'—'}</div>
+          <div class="pool-tx-date">${tx.date}</div>
+        </div>
+        <div class="pool-tx-amt" style="color:${tx.type==='in'?'var(--green)':'var(--red)'}">${tx.type==='in'?'+':'-'}${fmt(tx.amount)}</div>
+        <button class="pool-tx-del" onclick="delPoolTx('${key}','${memberId||''}',${tx._idx})">×</button>
+      </div>`).join('');
+    return `<div class="pool-card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-size:14px;font-weight:500;color:var(--text)">${label}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">
+            存入 ${fmt(mIn)} · 取用 ${fmt(mOut)} · 
+            <span style="color:${mBal>=0?'var(--green)':'var(--red)'}">${mBal>=0?'+':''}${fmt(mBal)}</span>
           </div>
-          <div class="pool-tx-amt" style="color:${tx.type==='in'?'var(--green)':'var(--red)'}">${tx.type==='in'?'+':'-'}${fmt(tx.amount)}</div>
-          <button class="pool-tx-del" onclick="delPoolTx('${key}','${memberId||''}',${i})">×</button>
-        </div>`;
-      }).join('')
-    : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:1rem 0">尚無記錄</div>';
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--text3)">累計餘額</div>
+          <div style="font-size:15px;font-weight:500;color:${cumBal>=0?'var(--green)':'var(--red)'}">${fmt(cumBal)}</div>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:8px">${rows}</div>
+    </div>`;
+  }).join('') : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:1.5rem 0">尚無記錄<br><span style="font-size:12px">點「存入」開始記錄盈餘</span></div>';
 
   document.getElementById('pool_body').innerHTML=`
-    <div class="pool-card">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+    <div class="pool-card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <span style="font-size:20px">${icon}</span>
         <span style="font-size:14px;font-weight:500;color:var(--text)">${title}</span>
       </div>
-      <div class="pool-balance ${balance>=0?'pos':'neg'}">${balance>=0?'':'- '}${fmt(Math.abs(balance))}</div>
-      ${suggestSurplus>0?`<div style="font-size:12px;color:var(--green);background:var(--green-bg);padding:6px 10px;border-radius:var(--radius-sm);margin-bottom:10px">
-        💡 本月盈餘 ${fmt(suggestSurplus)}，可存入池中
+      <div style="font-size:12px;color:var(--text3);margin-bottom:6px">累計總餘額</div>
+      <div class="pool-balance ${totalBalance>=0?'pos':'neg'}">${totalBalance>=0?'':'-'}${fmt(Math.abs(totalBalance))}</div>
+      ${suggestSurplus>0?`<div style="font-size:12px;color:var(--green-text);background:var(--green-bg);padding:7px 10px;border-radius:var(--radius-sm);margin-bottom:10px">
+        💡 ${curMonth.getFullYear()}年${curMonth.getMonth()+1}月盈餘 ${fmt(suggestSurplus)}，可存入池中
       </div>`:''}
       <div class="pool-actions">
         <button class="btn pri" style="flex:1" onclick="openPoolModal('${key}','${memberId||''}','in','${suggestSurplus}')">＋ 存入</button>
-        <button class="btn del" style="flex:1" onclick="openPoolModal('${key}','${memberId||''}','out','0')" ${balance<=0?'disabled style="opacity:.4;pointer-events:none"':''}>取用</button>
+        <button class="btn del" style="flex:1" onclick="openPoolModal('${key}','${memberId||''}','out','0')" ${totalBalance<=0?'disabled style="opacity:.4;pointer-events:none"':''}>取用</button>
       </div>
     </div>
-    <div class="sh" style="margin-top:1rem">交易記錄</div>
-    <div class="pool-card" style="padding:.75rem 1rem">
-      ${txHTML}
-    </div>`;
+    <div class="sh">依月份記錄</div>
+    ${monthlyHTML}`;
 }
+window.renderPool=renderPool;
 
 function setPoolView(v){poolView=v;renderPool();}
 window.setPoolView=setPoolView;
@@ -1562,8 +1598,8 @@ function openPoolModal(key, memberId, type, suggestAmt){
   const isIn=type==='in';
   const today=new Date();
   const dateStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-  const ym=`${today.getFullYear()} 年 ${today.getMonth()+1} 月`;
-  const defaultNote=isIn?`${ym} 盈餘結轉`:'';
+  const ymLabel=`${curMonth.getFullYear()}年${curMonth.getMonth()+1}月`;
+  const defaultNote=isIn?`${ymLabel}盈餘結轉`:'';
   document.getElementById('modal_root').innerHTML=`
     <div class="modal-bg" onclick="closeModal(event)">
       <div class="modal-box">
@@ -1573,14 +1609,11 @@ function openPoolModal(key, memberId, type, suggestAmt){
         </div>
         <div class="fg" style="margin-bottom:10px">
           <label>金額（NT$）</label>
-          <input type="number" id="pool_amt" value="${suggestAmt>0?suggestAmt:''}" placeholder="0" min="0" inputmode="numeric">
-          ${isIn&&suggestAmt>0?`<div style="font-size:11px;color:var(--green);margin-top:4px">建議金額：本月盈餘 ${fmt(Number(suggestAmt))}</div>`:''}
+          <input type="number" id="pool_amt" value="${Number(suggestAmt)>0?suggestAmt:''}" placeholder="0" min="0" inputmode="numeric">
+          ${isIn&&Number(suggestAmt)>0?`<div style="font-size:11px;color:var(--green);margin-top:4px">建議：本月盈餘 ${fmt(Number(suggestAmt))}</div>`:''}
         </div>
         <div class="fr" style="margin-bottom:10px">
-          <div class="fg">
-            <label>日期</label>
-            <input type="date" id="pool_date" value="${dateStr}">
-          </div>
+          <div class="fg"><label>日期</label><input type="date" id="pool_date" value="${dateStr}"></div>
         </div>
         <div class="fg" style="margin-bottom:14px">
           <label>說明</label>
@@ -1591,21 +1624,20 @@ function openPoolModal(key, memberId, type, suggestAmt){
             <input type="checkbox" id="pool_create_rec" checked style="width:14px;height:14px">
             同時在明細新增「盈餘支出」記錄
           </label>
-          <div class="fg" style="margin-top:8px" id="pool_rec_opts">
-            <label>支出成員</label>
-            <select id="pool_rec_person">${window.members.map(m=>`<option value="${m.id}">${m.avatar} ${m.name}</option>`).join('')}</select>
+          <div style="margin-top:8px" id="pool_rec_opts">
+            <div class="fg"><label>支出成員</label>
+            <select id="pool_rec_person">${window.members.map(m=>`<option value="${m.id}">${m.avatar} ${m.name}</option>`).join('')}</select></div>
           </div>
         </div>`:''}
-        <button class="btn pri" style="width:100%" onclick="confirmPoolTx('${key}','${memberId}','${type}')">
+        <button class="btn pri" style="width:100%" onclick="confirmPoolTx('${key}','${memberId||''}','${type}')">
           ${isIn?'確認存入':'確認取用'}
         </button>
       </div>
     </div>`;
-  // 勾選連動
   const cb=document.getElementById('pool_create_rec');
   if(cb) cb.onchange=()=>{
     const opts=document.getElementById('pool_rec_opts');
-    if(opts) opts.style.display=cb.checked?'flex':'none';
+    if(opts) opts.style.display=cb.checked?'block':'none';
   };
 }
 window.openPoolModal=openPoolModal;
@@ -1618,10 +1650,10 @@ function confirmPoolTx(key, memberId, type){
 
   const sp=window.surplusPool;
   const tx={type,amount,date,note,id:Date.now()};
+  const isFamily=key==='family';
 
-  if(key==='family'){
+  if(isFamily){
     if(!sp.family) sp.family=[];
-    // 取用時檢查餘額
     if(type==='out'){
       const bal=sp.family.reduce((s,t)=>s+(t.type==='in'?t.amount:-t.amount),0);
       if(amount>bal){alert(`家庭池餘額不足！目前餘額 ${fmt(bal)}`);return;}
@@ -1637,7 +1669,6 @@ function confirmPoolTx(key, memberId, type){
     sp.members[memberId].push(tx);
   }
 
-  // 取用時自動新增記帳記錄
   if(type==='out'){
     const createRec=document.getElementById('pool_create_rec')?.checked;
     if(createRec){
@@ -1656,11 +1687,8 @@ window.confirmPoolTx=confirmPoolTx;
 function delPoolTx(key, memberId, idx){
   if(!confirm('確定刪除此筆記錄？'))return;
   const sp=window.surplusPool;
-  if(key==='family'){
-    sp.family.splice(idx,1);
-  } else {
-    if(sp.members&&sp.members[memberId]) sp.members[memberId].splice(idx,1);
-  }
+  if(key==='family') sp.family.splice(idx,1);
+  else if(sp.members&&sp.members[memberId]) sp.members[memberId].splice(idx,1);
   window.fbSavePool();
   renderPool();
 }
