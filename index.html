@@ -379,7 +379,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
   </div>
 </div>
 
-<div id="tov"><div id="ov_summary"></div><div id="ov_alert"></div><div id="ov_body"></div><div style="margin-top:1rem;text-align:center"><button class="btn" onclick="goTab('yr')" style="font-size:13px;gap:6px">📈 查看年度盈餘走勢</button></div></div>
+<div id="tov"><div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button class="btn" onclick="goTab('yr')" style="font-size:12px;padding:5px 12px;color:var(--text2)">📈 年度走勢</button></div><div id="ov_summary"></div><div id="ov_alert"></div><div id="ov_body"></div></div>
 <div id="modal_root"></div>
 
 <div id="tyr" style="display:none">
@@ -387,7 +387,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
   <div class="sh" id="yr_title"></div>
   <div class="ygrid" id="yr_totals"></div>
   <div class="sh">每月盈餘走勢</div>
-  <div class="cbw" id="yr_chart"></div>
+  <div id="yr_chart" style="margin-bottom:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 4px;box-shadow:var(--shadow)"></div>
   <div style="margin-bottom:1.25rem"></div>
   <div class="sh">支出分類統計</div>
   <div id="yr_cat_chart" class="pie-wrap"></div>
@@ -801,19 +801,63 @@ function renderYearly(){
     <div class="ym"><div class="yml">年度總支出</div><div class="ymv" style="color:var(--red)">${fmt(yE)}</div></div>
     <div class="ym"><div class="yml">累計盈餘</div><div class="ymv" style="color:${yS>=0?'var(--green)':'var(--red)'}">${fmt(yS)}</div></div>
     <div class="ym"><div class="yml">平均每月</div><div class="ymv" style="color:${yS>=0?'var(--green)':'var(--red)'}">${md.length?fmt(Math.round(yS/md.length)):fmt(0)}</div></div>`;
-  const maxA=Math.max(...md.map(d=>Math.abs(d.sur)),1),BH=90;
-  document.getElementById('yr_chart').innerHTML=md.map(d=>{
-    const h=Math.max(Math.round(Math.abs(d.sur)/maxA*BH),3),c=d.sur>=0?'var(--green)':'var(--red)';
-    return `<div class="cc">
-      <div style="position:relative;width:100%;display:flex;justify-content:center;height:${BH}px;align-items:flex-end">
-        <div style="width:78%;height:${h}px;background:${c};border-radius:4px 4px 0 0;position:relative">
-          <span style="font-size:9px;font-weight:500;position:absolute;top:-15px;left:50%;transform:translateX(-50%);white-space:nowrap;color:${c}">${fmtS(d.sur)}</span>
-        </div>
-      </div>
-      <div class="cz"></div>
-      <div class="ccl">${MZH[d.m]}${d.budOver?'⚠️':''}</div>
-    </div>`;
-  }).join('');
+  // ── SVG 曲線圖 ──
+  const W=600, H=140, PAD={t:28,r:16,b:28,l:48};
+  const iW=W-PAD.l-PAD.r, iH=H-PAD.t-PAD.b;
+  const vals=md.map(d=>d.sur);
+  const minV=Math.min(...vals,0), maxV=Math.max(...vals,0);
+  const range=maxV-minV||1;
+  const xStep=md.length>1?iW/(md.length-1):iW;
+  const toX=i=>PAD.l+(md.length>1?i*xStep:iW/2);
+  const toY=v=>PAD.t+iH-(((v-minV)/range)*iH);
+  const zeroY=toY(0);
+
+  // 折線點
+  const pts=md.map((d,i)=>({x:toX(i),y:toY(d.sur),sur:d.sur,m:d.m,budOver:d.budOver}));
+
+  // path
+  const linePath=pts.map((p,i)=>(i===0?`M${p.x},${p.y}`:`L${p.x},${p.y}`)).join(' ');
+  // 填色區域
+  const areaPath=pts.length
+    ?`M${pts[0].x},${zeroY} `+pts.map(p=>`L${p.x},${p.y}`).join(' ')+` L${pts[pts.length-1].x},${zeroY} Z`
+    :'';
+
+  // Y 軸刻度（3條）
+  const yTicks=[minV, (minV+maxV)/2, maxV].map(v=>({v,y:toY(v)}));
+
+  const svgHTML=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;overflow:visible">
+    <defs>
+      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${minV<0?'#c94a20':'#0f8a5f'}" stop-opacity="0.18"/>
+        <stop offset="100%" stop-color="${minV<0?'#c94a20':'#0f8a5f'}" stop-opacity="0.02"/>
+      </linearGradient>
+    </defs>
+    <!-- 格線 -->
+    ${yTicks.map(t=>`<line x1="${PAD.l}" y1="${t.y}" x2="${W-PAD.r}" y2="${t.y}" stroke="#e8e8e2" stroke-width="1"/>`).join('')}
+    <!-- 零線 -->
+    <line x1="${PAD.l}" y1="${zeroY}" x2="${W-PAD.r}" y2="${zeroY}" stroke="#d8d8d0" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <!-- Y 刻度 -->
+    ${yTicks.map(t=>`<text x="${PAD.l-6}" y="${t.y+4}" text-anchor="end" font-size="10" fill="#a8a8aa">${fmtS(Math.round(t.v))}</text>`).join('')}
+    <!-- X 標籤 -->
+    ${pts.map(p=>`<text x="${p.x}" y="${H-4}" text-anchor="middle" font-size="10" fill="#a8a8aa">${MZH[p.m]}${p.budOver?'⚠':''}</text>`).join('')}
+    <!-- 填色 -->
+    ${areaPath?`<path d="${areaPath}" fill="url(#areaGrad)"/>`:''}
+    <!-- 折線 -->
+    <path d="${linePath}" fill="none" stroke="#0f8a5f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- 資料點 -->
+    ${pts.map(p=>{
+      const c=p.sur>=0?'#0f8a5f':'#c94a20';
+      const label=fmtS(p.sur);
+      const labelY=p.sur>=0?p.y-10:p.y+16;
+      return `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${c}" stroke="#fff" stroke-width="2"/>
+        <text x="${p.x}" y="${labelY}" text-anchor="middle" font-size="10" font-weight="500" fill="${c}">${label}</text>`;
+    }).join('')}
+  </svg>`;
+
+  const chartEl=document.getElementById('yr_chart');
+  chartEl.style.height='auto';
+  chartEl.style.padding='8px 0';
+  chartEl.innerHTML=svgHTML;
   renderCatChart(yrMember);
   document.getElementById('yr_rows').innerHTML=md.slice().reverse().map(d=>{
     const pc=d.sur>=0?'background:var(--green-bg);color:var(--green-text)':'background:var(--red-bg);color:var(--red-text)';
