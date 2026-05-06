@@ -39,7 +39,7 @@
 
   window._db=db; window._ref=ref; window._set=set; window._push=push; window._remove=remove;
   window.members=[]; window.cats=[]; window.records=[];
-  window.monthBudgets={}; window.quickItems={}; 
+  window.monthBudgets={}; window.quickItems={}; window.surplusPool={};
   window.fbReady=false;
 
   onValue(ref(db,"members"), snap=>{
@@ -60,7 +60,12 @@
     window.quickItems = snap.val() || {};
     if(window.fbReady && window.activeTab==='add') window.renderAddForm();
   });
-
+  onValue(ref(db,"surplusPool"), snap=>{
+    window.surplusPool = snap.val() || {family:[], members:{}};
+    if(!window.surplusPool.family) window.surplusPool.family=[];
+    if(!window.surplusPool.members) window.surplusPool.members={};
+    if(window.fbReady && window.activeTab==='pool') renderPool();
+  });
   onValue(ref(db,"records"), snap=>{
     window.records = snap.val() ? Object.values(snap.val()) : [];
     if(!window.fbReady){
@@ -77,6 +82,7 @@
   window.fbDelRecord       = (id)=> remove(ref(db,`records/${id}`));
   window.fbUpdateRecord    = (id,data)=> set(ref(db,`records/${id}`),data);
   window.fbSaveQuickItems  = ()=> set(ref(db,"quickItems"), window.quickItems);
+  window.fbSavePool        = ()=> set(ref(db,"surplusPool"), window.surplusPool);
 
 </script>
 <style>
@@ -319,6 +325,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 .export-btn:hover{background:var(--surface2)}
 
 
+/* ─ 盈餘池 ─ */
+.pool-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;margin-bottom:10px;box-shadow:var(--shadow)}
+.pool-balance{font-size:28px;font-weight:500;letter-spacing:-0.5px;margin:4px 0 12px}
+.pool-balance.pos{color:var(--green)}.pool-balance.neg{color:var(--red)}
+.pool-tx-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)}
+.pool-tx-row:last-child{border-bottom:none}
+.pool-tx-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pool-tx-in{background:var(--green)}.pool-tx-out{background:var(--red)}
+.pool-tx-info{flex:1;min-width:0}
+.pool-tx-note{font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pool-tx-date{font-size:11px;color:var(--text3);margin-top:1px}
+.pool-tx-amt{font-size:14px;font-weight:500;flex-shrink:0}
+.pool-tx-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 6px}
+.pool-tx-del:hover{color:var(--red)}
+.pool-actions{display:flex;gap:8px;margin-top:10px}
+.pool-tab-row{display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap}
+.pool-tab{padding:5px 14px;border-radius:var(--radius-pill);border:1px solid var(--border);font-size:13px;cursor:pointer;background:var(--surface);font-family:inherit;color:var(--text2);transition:all .15s}
+.pool-tab.on{background:var(--text);color:#fff;border-color:var(--text)}
+
 @media(max-width:500px){.fr.t3{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -326,12 +351,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 <div id="lo"><div class="spin"></div><span>連線中...</span></div>
 
 <nav class="bottom-nav" id="bottomNav">
-  <button class="bnav-btn on" onclick="goTab('ov')" id="nb_ov"><span class="bnav-icon">📊</span>總覽</button>
-  <button class="bnav-btn" onclick="goTab('yr')"  id="nb_yr"><span class="bnav-icon">📈</span>年度</button>
-  <button class="bnav-btn" onclick="goTab('bud')" id="nb_bud"><span class="bnav-icon">🎯</span>預算</button>
-  <button class="bnav-btn" onclick="goTab('add')" id="nb_add"><span class="bnav-icon">➕</span>記帳</button>
-  <button class="bnav-btn" onclick="goTab('rec')" id="nb_rec"><span class="bnav-icon">📋</span>明細</button>
-  <button class="bnav-btn" onclick="goTab('mem')" id="nb_mem"><span class="bnav-icon">👥</span>設定</button>
+  <button class="bnav-btn on" onclick="goTab('ov')"   id="nb_ov"><span class="bnav-icon">📊</span>總覽</button>
+  <button class="bnav-btn" onclick="goTab('yr')"       id="nb_yr"><span class="bnav-icon">📈</span>年度</button>
+  <button class="bnav-btn" onclick="goTab('add')"      id="nb_add"><span class="bnav-icon">➕</span>記帳</button>
+  <button class="bnav-btn" onclick="goTab('pool')"     id="nb_pool"><span class="bnav-icon">🏦</span>盈餘池</button>
+  <button class="bnav-btn" onclick="goTab('rec')"      id="nb_rec"><span class="bnav-icon">📋</span>明細</button>
+  <button class="bnav-btn" onclick="goTab('mem')"      id="nb_mem"><span class="bnav-icon">⚙️</span>設定</button>
 </nav>
 
 <div class="wrap">
@@ -437,6 +462,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 </div>
 
 <div id="tmem" style="display:none">
+
+<div id="tpool" style="display:none">
+  <div class="pool-tab-row" id="pool_tabs"></div>
+  <div id="pool_body"></div>
+</div>
   <div class="sh">成員</div>
   <div class="tip" style="margin-top:-4px">點頭像換圖示，名稱可直接編輯</div>
   <div id="mem_cards"></div>
@@ -503,7 +533,7 @@ function chMonth(d){curMonth=new Date(curMonth.getFullYear(),curMonth.getMonth()
 
 function goTab(t){
   activeTab=t; window.activeTab=t;
-  ['ov','yr','bud','add','rec','mem'].forEach(x=>{
+  ['ov','yr','bud','add','rec','mem','pool'].forEach(x=>{
     const el=document.getElementById('t'+x);if(el)el.style.display=t===x?'block':'none';
     const nb=document.getElementById('nb_'+x);if(nb)nb.classList.toggle('on',t===x);
   });
@@ -513,6 +543,7 @@ function goTab(t){
   else if(t==='add') renderAddForm();
   else if(t==='rec') renderRec();
   else if(t==='mem'){catDraft=null;renderMembers();}
+  else if(t==='pool') renderPool();
 }
 
 /* ══════════════════════════════
@@ -1439,6 +1470,192 @@ function renderCatChart(yrMember){
 }
 window.renderCatChart=renderCatChart;
 
+/* ══════════════════════════════
+   盈餘池
+══════════════════════════════ */
+let poolView='family'; // 'family' | member id
+
+function renderPool(){
+  const sp=window.surplusPool;
+  const tabs=`<button class="pool-tab ${poolView==='family'?'on':''}" onclick="setPoolView('family')">🏠 家庭共用</button>`
+    +window.members.map(m=>`<button class="pool-tab ${poolView===m.id?'on':''}" onclick="setPoolView('${m.id}')">${m.avatar} ${m.name}</button>`).join('');
+  document.getElementById('pool_tabs').innerHTML=tabs;
+
+  if(poolView==='family'){
+    renderPoolSection('family', '家庭共用池', '🏠', null);
+  } else {
+    const mem=window.members.find(m=>m.id===poolView);
+    renderPoolSection('member_'+poolView, mem?mem.name:'個人', mem?mem.avatar:'👤', poolView);
+  }
+}
+window.renderPool=renderPool;
+
+function renderPoolSection(key, title, icon, memberId){
+  const sp=window.surplusPool;
+  const txList = key==='family' ? (sp.family||[]) : (sp.members&&sp.members[memberId]||[]);
+  const balance = txList.reduce((s,tx)=>s+(tx.type==='in'?tx.amount:-tx.amount),0);
+
+  // 本月盈餘（可快速存入）
+  let suggestSurplus=0;
+  if(key==='family'){
+    const allRecs=getMonthRecs('all');
+    const inc=allRecs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+    const exp=allRecs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+    suggestSurplus=Math.max(0,inc-exp);
+  } else if(memberId){
+    const recs=getMonthRecs(memberId);
+    const inc=recs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+    const exp=recs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+    suggestSurplus=Math.max(0,inc-exp);
+  }
+
+  const txHTML = txList.length
+    ? [...txList].reverse().map((tx,ri)=>{
+        const i=txList.length-1-ri;
+        return `<div class="pool-tx-row">
+          <div class="pool-tx-dot ${tx.type==='in'?'pool-tx-in':'pool-tx-out'}"></div>
+          <div class="pool-tx-info">
+            <div class="pool-tx-note">${tx.note||'—'}</div>
+            <div class="pool-tx-date">${tx.date}</div>
+          </div>
+          <div class="pool-tx-amt" style="color:${tx.type==='in'?'var(--green)':'var(--red)'}">${tx.type==='in'?'+':'-'}${fmt(tx.amount)}</div>
+          <button class="pool-tx-del" onclick="delPoolTx('${key}','${memberId||''}',${i})">×</button>
+        </div>`;
+      }).join('')
+    : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:1rem 0">尚無記錄</div>';
+
+  document.getElementById('pool_body').innerHTML=`
+    <div class="pool-card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+        <span style="font-size:20px">${icon}</span>
+        <span style="font-size:14px;font-weight:500;color:var(--text)">${title}</span>
+      </div>
+      <div class="pool-balance ${balance>=0?'pos':'neg'}">${balance>=0?'':'- '}${fmt(Math.abs(balance))}</div>
+      ${suggestSurplus>0?`<div style="font-size:12px;color:var(--green);background:var(--green-bg);padding:6px 10px;border-radius:var(--radius-sm);margin-bottom:10px">
+        💡 本月盈餘 ${fmt(suggestSurplus)}，可存入池中
+      </div>`:''}
+      <div class="pool-actions">
+        <button class="btn pri" style="flex:1" onclick="openPoolModal('${key}','${memberId||''}','in','${suggestSurplus}')">＋ 存入</button>
+        <button class="btn del" style="flex:1" onclick="openPoolModal('${key}','${memberId||''}','out','0')" ${balance<=0?'disabled style="opacity:.4;pointer-events:none"':''}>取用</button>
+      </div>
+    </div>
+    <div class="sh" style="margin-top:1rem">交易記錄</div>
+    <div class="pool-card" style="padding:.75rem 1rem">
+      ${txHTML}
+    </div>`;
+}
+
+function setPoolView(v){poolView=v;renderPool();}
+window.setPoolView=setPoolView;
+
+function openPoolModal(key, memberId, type, suggestAmt){
+  const isIn=type==='in';
+  const today=new Date();
+  const dateStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const ym=`${today.getFullYear()} 年 ${today.getMonth()+1} 月`;
+  const defaultNote=isIn?`${ym} 盈餘結轉`:'';
+  document.getElementById('modal_root').innerHTML=`
+    <div class="modal-bg" onclick="closeModal(event)">
+      <div class="modal-box">
+        <div class="modal-hd">
+          <span class="modal-title">${isIn?'💰 存入盈餘池':'💸 從盈餘池取用'}</span>
+          <button class="modal-close" onclick="closeModal(null,true)">×</button>
+        </div>
+        <div class="fg" style="margin-bottom:10px">
+          <label>金額（NT$）</label>
+          <input type="number" id="pool_amt" value="${suggestAmt>0?suggestAmt:''}" placeholder="0" min="0" inputmode="numeric">
+          ${isIn&&suggestAmt>0?`<div style="font-size:11px;color:var(--green);margin-top:4px">建議金額：本月盈餘 ${fmt(Number(suggestAmt))}</div>`:''}
+        </div>
+        <div class="fr" style="margin-bottom:10px">
+          <div class="fg">
+            <label>日期</label>
+            <input type="date" id="pool_date" value="${dateStr}">
+          </div>
+        </div>
+        <div class="fg" style="margin-bottom:14px">
+          <label>說明</label>
+          <input type="text" id="pool_note" value="${defaultNote}" placeholder="${isIn?'例：1月盈餘結轉':'例：醫療費、緊急支出'}">
+        </div>
+        ${!isIn?`<div class="fg" style="margin-bottom:14px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="pool_create_rec" checked style="width:14px;height:14px">
+            同時在明細新增「盈餘支出」記錄
+          </label>
+          <div class="fg" style="margin-top:8px" id="pool_rec_opts">
+            <label>支出成員</label>
+            <select id="pool_rec_person">${window.members.map(m=>`<option value="${m.id}">${m.avatar} ${m.name}</option>`).join('')}</select>
+          </div>
+        </div>`:''}
+        <button class="btn pri" style="width:100%" onclick="confirmPoolTx('${key}','${memberId}','${type}')">
+          ${isIn?'確認存入':'確認取用'}
+        </button>
+      </div>
+    </div>`;
+  // 勾選連動
+  const cb=document.getElementById('pool_create_rec');
+  if(cb) cb.onchange=()=>{
+    const opts=document.getElementById('pool_rec_opts');
+    if(opts) opts.style.display=cb.checked?'flex':'none';
+  };
+}
+window.openPoolModal=openPoolModal;
+
+function confirmPoolTx(key, memberId, type){
+  const amount=parseFloat(document.getElementById('pool_amt').value)||0;
+  const date=document.getElementById('pool_date').value;
+  const note=document.getElementById('pool_note').value.trim();
+  if(!amount){alert('請輸入金額');return;}
+
+  const sp=window.surplusPool;
+  const tx={type,amount,date,note,id:Date.now()};
+
+  if(key==='family'){
+    if(!sp.family) sp.family=[];
+    // 取用時檢查餘額
+    if(type==='out'){
+      const bal=sp.family.reduce((s,t)=>s+(t.type==='in'?t.amount:-t.amount),0);
+      if(amount>bal){alert(`家庭池餘額不足！目前餘額 ${fmt(bal)}`);return;}
+    }
+    sp.family.push(tx);
+  } else {
+    if(!sp.members) sp.members={};
+    if(!sp.members[memberId]) sp.members[memberId]=[];
+    if(type==='out'){
+      const bal=(sp.members[memberId]||[]).reduce((s,t)=>s+(t.type==='in'?t.amount:-t.amount),0);
+      if(amount>bal){alert(`個人池餘額不足！目前餘額 ${fmt(bal)}`);return;}
+    }
+    sp.members[memberId].push(tx);
+  }
+
+  // 取用時自動新增記帳記錄
+  if(type==='out'){
+    const createRec=document.getElementById('pool_create_rec')?.checked;
+    if(createRec){
+      const person=document.getElementById('pool_rec_person')?.value||window.members[0]?.id||'A';
+      window.fbAddRecord({type:'expense',person,category:'盈餘池取用',amount,note:note||'盈餘池取用',date});
+    }
+  }
+
+  window.fbSavePool();
+  closeModal(null,true);
+  showToast(type==='in'?`已存入 ${fmt(amount)}`:`已取用 ${fmt(amount)}`);
+  renderPool();
+}
+window.confirmPoolTx=confirmPoolTx;
+
+function delPoolTx(key, memberId, idx){
+  if(!confirm('確定刪除此筆記錄？'))return;
+  const sp=window.surplusPool;
+  if(key==='family'){
+    sp.family.splice(idx,1);
+  } else {
+    if(sp.members&&sp.members[memberId]) sp.members[memberId].splice(idx,1);
+  }
+  window.fbSavePool();
+  renderPool();
+}
+window.delPoolTx=delPoolTx;
+
 window.updateAll=function(){
   window.updateMonthLabel();
   if(activeTab==='ov'){ renderSummaryCard(); renderOverview(); }
@@ -1446,6 +1663,7 @@ window.updateAll=function(){
   else if(activeTab==='bud') renderBudget();
   else if(activeTab==='rec') renderRec();
   else if(activeTab==='mem') renderMembers();
+  else if(activeTab==='pool') renderPool();
 };
 window.addEventListener('online',()=>document.getElementById('sd').classList.remove('off'));
 window.addEventListener('offline',()=>document.getElementById('sd').classList.add('off'));
