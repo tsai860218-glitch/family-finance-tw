@@ -269,9 +269,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 .quick-btn .qb-icon{font-size:20px;display:block;margin-bottom:4px}
 .quick-btn .qb-name{font-size:12px;color:var(--text2);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .quick-btn .qb-amt{font-size:13px;font-weight:500;color:var(--red);display:block}
-.quick-btn .qb-del{position:absolute;top:4px;right:4px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px;line-height:1;display:none}
+.quick-btn .qb-del{position:absolute;top:3px;right:3px;background:var(--surface2);border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;line-height:1;display:none;border-radius:4px}
 .quick-btn:hover .qb-del{display:block}
-.quick-btn .qb-del:hover{color:var(--red)}
+.quick-btn .qb-del:hover{background:var(--border);color:var(--text)}
 .add-quick-btn{background:var(--surface2);border:1px dashed var(--border2);border-radius:var(--radius);padding:10px 8px;cursor:pointer;font-family:inherit;text-align:center;color:var(--text3);font-size:13px;transition:all .15s}
 .add-quick-btn:hover{border-color:var(--text2);color:var(--text2)}
 
@@ -1283,10 +1283,10 @@ function renderQuickGrid(){
   if(!el) return;
   el.innerHTML=items.map((q,i)=>`
     <div class="quick-btn" onclick="applyQuick(${i},'${mid}')">
-      <button class="qb-del" onclick="event.stopPropagation();delQuick(${i},'${mid}')">×</button>
+      <button class="qb-del" onclick="event.stopPropagation();openEditQuickModal(${i},'${mid}')" title="編輯">✏️</button>
       <span class="qb-icon">${q.icon||'💰'}</span>
       <span class="qb-name">${q.name}</span>
-      <span class="qb-amt">-${fmt(q.amount)}</span>
+      <span class="qb-amt">${fmt(q.amount)}</span>
     </div>`).join('')+
   `<button class="add-quick-btn" onclick="openAddQuickModal('${mid}')">＋ 新增常用</button>`;
 }
@@ -1294,10 +1294,26 @@ window.renderQuickGrid=renderQuickGrid;
 
 function applyQuick(idx,mid){
   const q=(window.quickItems[mid]||[])[idx]; if(!q) return;
-  const n=new Date();
-  const date=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-  window.fbAddRecord({type:'expense',person:mid,category:q.category,amount:q.amount,note:q.name,date});
-  showToast(`已記帳：${q.name} ${fmt(q.amount)}`);
+  // 帶入表單，不自動記帳
+  const typeEl=document.getElementById('aType');
+  const personEl=document.getElementById('aPerson');
+  const amtEl=document.getElementById('aAmt');
+  const noteEl=document.getElementById('aNote');
+  if(typeEl) typeEl.value='expense';
+  if(personEl) personEl.value=mid;
+  if(amtEl) amtEl.value=q.amount;
+  if(noteEl) noteEl.value=q.name;
+  refreshCatSel();
+  // 選對分類
+  const catEl=document.getElementById('aCat');
+  if(catEl){
+    const opt=[...catEl.options].find(o=>o.value===q.category);
+    if(opt) catEl.value=q.category;
+  }
+  // 顯示帶入提示
+  showToast(`已帶入「${q.name}」，確認後按新增記帳`);
+  // scroll 到表單
+  document.getElementById('aAmt')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
 window.applyQuick=applyQuick;
 
@@ -1310,7 +1326,8 @@ function delQuick(idx,mid){
 window.delQuick=delQuick;
 
 function openAddQuickModal(mid){
-  const catOpts=window.cats.map(c=>`<option value="${c.name}">${c.icon} ${c.name}</option>`).join('');
+  const fc=fixedCats(window.cats), vc=varCats(window.cats);
+  const catOpts=`<optgroup label="── 固定支出 ──">${fc.map(c=>`<option value="${c.name}">${c.icon} ${c.name}</option>`).join('')}</optgroup><optgroup label="── 不固定支出 ──">${vc.map(c=>`<option value="${c.name}">${c.icon} ${c.name}</option>`).join('')}</optgroup>`;
   document.getElementById('modal_root').innerHTML=`
     <div class="modal-bg" onclick="closeModal(event)">
       <div class="modal-box">
@@ -1318,15 +1335,54 @@ function openAddQuickModal(mid){
         <div class="fr" style="grid-template-columns:1fr;margin-bottom:8px">
           <div class="fg"><label>名稱（顯示在按鈕上）</label><input type="text" id="qq_name" placeholder="早餐、停車費..."></div>
         </div>
-        <div class="fr">
+        <div class="fr" style="margin-bottom:10px">
           <div class="fg"><label>金額（NT$）</label><input type="number" id="qq_amt" placeholder="0" min="0"></div>
           <div class="fg"><label>分類</label><select id="qq_cat">${catOpts}</select></div>
         </div>
-        <button class="btn pri" style="width:100%;margin-top:10px" onclick="confirmAddQuick('${mid}')">＋ 確認新增</button>
+        <button class="btn pri" style="width:100%" onclick="confirmAddQuick('${mid}')">＋ 確認新增</button>
       </div>
     </div>`;
 }
 window.openAddQuickModal=openAddQuickModal;
+
+function openEditQuickModal(idx,mid){
+  const q=(window.quickItems[mid]||[])[idx]; if(!q) return;
+  const fc=fixedCats(window.cats), vc=varCats(window.cats);
+  const catOpts=`<optgroup label="── 固定支出 ──">${fc.map(c=>`<option value="${c.name}" ${c.name===q.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</optgroup><optgroup label="── 不固定支出 ──">${vc.map(c=>`<option value="${c.name}" ${c.name===q.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</optgroup>`;
+  document.getElementById('modal_root').innerHTML=`
+    <div class="modal-bg" onclick="closeModal(event)">
+      <div class="modal-box">
+        <div class="modal-hd"><span class="modal-title">編輯常用項目</span><button class="modal-close" onclick="closeModal(null,true)">×</button></div>
+        <div class="fr" style="grid-template-columns:1fr;margin-bottom:8px">
+          <div class="fg"><label>名稱</label><input type="text" id="qq_name" value="${q.name}"></div>
+        </div>
+        <div class="fr" style="margin-bottom:10px">
+          <div class="fg"><label>金額（NT$）</label><input type="number" id="qq_amt" value="${q.amount}" min="0"></div>
+          <div class="fg"><label>分類</label><select id="qq_cat">${catOpts}</select></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn pri" style="flex:1" onclick="confirmEditQuick(${idx},'${mid}')">儲存</button>
+          <button class="btn del" onclick="delQuick(${idx},'${mid}');closeModal(null,true)">刪除</button>
+        </div>
+      </div>
+    </div>`;
+}
+window.openEditQuickModal=openEditQuickModal;
+
+function confirmEditQuick(idx,mid){
+  const name=document.getElementById('qq_name').value.trim();
+  const amount=parseFloat(document.getElementById('qq_amt').value)||0;
+  const category=document.getElementById('qq_cat').value;
+  if(!name||!amount){alert('請填寫名稱與金額');return;}
+  const cat=window.cats.find(c=>c.name===category);
+  if(!window.quickItems[mid]||!window.quickItems[mid][idx]) return;
+  window.quickItems[mid][idx]={name,amount,category,icon:cat?cat.icon:'💰'};
+  window.fbSaveQuickItems();
+  closeModal(null,true);
+  renderQuickGrid();
+  showToast('已更新常用項目！');
+}
+window.confirmEditQuick=confirmEditQuick;
 
 function confirmAddQuick(mid){
   const name=document.getElementById('qq_name').value.trim();
