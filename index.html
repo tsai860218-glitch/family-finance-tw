@@ -46,11 +46,17 @@
     window.members = snap.val() ? Object.values(snap.val()) : DEF_MEMBERS;
     if(!snap.val()) set(ref(db,"members"), Object.fromEntries(DEF_MEMBERS.map(m=>[m.id,m])));
     if(window.fbReady) window.updateAll();
+    else if(window.records.length) { // records already in, re-trigger
+      try{window.renderSummaryCard();window.renderOverview();}catch(e){}
+    }
   });
   onValue(ref(db,"cats"), snap=>{
     window.cats = snap.val() ? Object.values(snap.val()) : DEF_CATS;
     if(!snap.val()) set(ref(db,"cats"), Object.fromEntries(DEF_CATS.map(c=>[c.id,c])));
     if(window.fbReady) window.updateAll();
+    else if(window.records.length) {
+      try{window.renderSummaryCard();window.renderOverview();}catch(e){}
+    }
   });
   onValue(ref(db,"monthBudgets"), snap=>{
     window.monthBudgets = snap.val() || {};
@@ -71,7 +77,9 @@
     if(!window.fbReady){
       window.fbReady=true;
       document.getElementById("lo").style.display="none";
-      window.updateMonthLabel(); window.renderOverview();
+      window.updateMonthLabel();
+      try { window.renderSummaryCard(); } catch(e){ console.warn('summary',e); }
+      try { window.renderOverview(); } catch(e){ console.warn('overview',e); }
     } else { window.updateAll(); }
   });
 
@@ -551,6 +559,7 @@ function goTab(t){
 ══════════════════════════════ */
 /* ══ 月份摘要卡 ══ */
 function renderSummaryCard(){
+  if(!window.members.length) return;
   const ym=ymKey(curMonth);
   const allRecs=getMonthRecs('all');
   const inc=allRecs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
@@ -581,6 +590,7 @@ function renderSummaryCard(){
 window.renderSummaryCard=renderSummaryCard;
 
 window.renderOverview=function(){
+  if(!window.members.length||!window.cats.length) return; // 等資料載入
   const ym=ymKey(curMonth);
   ensureMonthBudget(ym);
   const allRecs=getMonthRecs('all');
