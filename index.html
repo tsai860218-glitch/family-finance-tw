@@ -135,6 +135,30 @@
   // 目前登入的成員 ID（A 或 B）
   window.currentMemberId = null;
 
+  // 監聽登入請求事件（從普通 script 觸發）
+  document.addEventListener('doLoginRequest', async (e) => {
+    const { mid, pwd } = e.detail;
+    const EMAILS = {A:'celia@family.com', B:'john@family.com'};
+    const email = EMAILS[mid];
+    const errEl = document.getElementById('loginError');
+    const btn = document.getElementById('loginSubmitBtn');
+    if(btn){ btn.textContent='登入中...'; btn.disabled=true; }
+    try {
+      await signInWithEmailAndPassword(auth, email, pwd);
+      // onAuthStateChanged 會自動處理後續
+    } catch(e) {
+      const msg = e.code==='auth/wrong-password'||e.code==='auth/invalid-credential' ? '密碼錯誤，請再試一次'
+                : e.code==='auth/user-not-found' ? '帳號不存在'
+                : e.code==='auth/too-many-requests' ? '嘗試次數過多，請稍後再試'
+                : e.code==='auth/network-request-failed' ? '網路錯誤，請重試'
+                : '登入失敗：' + e.code;
+      if(errEl) errEl.textContent = msg;
+    }
+    if(btn){ btn.textContent='登入'; btn.disabled=false; }
+    const pwdEl = document.getElementById('loginPwd');
+    if(pwdEl) pwdEl.value = '';
+  });
+
   // Auth 狀態監聽
   onAuthStateChanged(auth, user => {
     if(user){
@@ -434,54 +458,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
     setTimeout(()=>document.getElementById('loginPwd')?.focus(), 100);
   };
 
-  window.submitLogin = async function(){
+  window.submitLogin = function(){
     const mid = window._loginMid;
-    const EMAILS = {A:'celia@family.com', B:'john@family.com'};
-    const email = EMAILS[mid];
     const pwd = document.getElementById('loginPwd')?.value || '';
     const errEl = document.getElementById('loginError');
-    const btn = document.getElementById('loginSubmitBtn');
-
-    if(!email){ if(errEl) errEl.textContent='請先選擇成員'; return; }
+    if(!mid){ if(errEl) errEl.textContent='請先選擇成員'; return; }
     if(!pwd){ if(errEl) errEl.textContent='請輸入密碼'; return; }
     if(errEl) errEl.textContent='';
-    if(btn){ btn.textContent='登入中...'; btn.disabled=true; }
-
-    // 先用 REST API 驗證帳密（速度快、不依賴 module）
-    const API_KEY = 'AIzaSyAqfmw0Valf69ZfIbq4Ftf8hb269ayqNak';
-    try {
-      const res = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
-        { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({email, password:pwd, returnSecureToken:true}) }
-      );
-      const data = await res.json();
-      if(data.error){
-        const code = data.error.message||'';
-        const msg = code.includes('INVALID_PASSWORD')||code.includes('INVALID_LOGIN_CREDENTIALS') ? '密碼錯誤，請再試一次'
-                  : code.includes('EMAIL_NOT_FOUND') ? '帳號不存在'
-                  : code.includes('TOO_MANY_ATTEMPTS') ? '嘗試次數過多，請稍後再試'
-                  : '登入失敗：' + code;
-        if(errEl) errEl.textContent = msg;
-        if(btn){ btn.textContent='登入'; btn.disabled=false; }
-        return;
-      }
-      // REST 驗證成功 → 用 SDK 登入讓 onAuthStateChanged 觸發
-      if(window.doLogin){
-        await window.doLogin(email, pwd);
-      } else {
-        // SDK 還沒好，直接手動進入 App
-        window.currentMemberId = mid;
-        document.getElementById('loginScreen').style.display='none';
-        document.getElementById('appScreen').style.display='block';
-        if(window.startListeners && !window.fbReady) window.startListeners();
-      }
-    } catch(e){
-      console.error('submitLogin error:', e);
-      if(errEl) errEl.textContent = '網路錯誤，請檢查連線後重試';
-    }
-    if(btn){ btn.textContent='登入'; btn.disabled=false; }
-    document.getElementById('loginPwd').value = '';
+    // 派發事件讓 module script 處理
+    document.dispatchEvent(new CustomEvent('doLoginRequest', {
+      detail: { mid, pwd }
+    }));
   };
 
   window.cancelLogin = function(){
