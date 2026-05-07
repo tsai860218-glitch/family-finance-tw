@@ -430,16 +430,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
     const EMAILS = {A:'celia@family.com', B:'john@family.com'};
     const email = EMAILS[mid];
     const pwd = document.getElementById('loginPwd')?.value || '';
-    if(!email || !pwd){
-      const e = document.getElementById('loginError');
-      if(e) e.textContent = '請輸入密碼';
-      return;
-    }
-    const btn = document.querySelector('#loginForm button');
+    const errEl = document.getElementById('loginError');
+
+    if(!email){ if(errEl) errEl.textContent='請先選擇成員'; return; }
+    if(!pwd){ if(errEl) errEl.textContent='請輸入密碼'; return; }
+
+    // 等 doLogin 掛上來
+    let tries = 0;
+    while(!window.doLogin && tries < 30){ await new Promise(r=>setTimeout(r,100)); tries++; }
+    if(!window.doLogin){ if(errEl) errEl.textContent='系統載入中，請稍後再試'; return; }
+
+    const btn = document.getElementById('loginSubmitBtn');
     if(btn){ btn.textContent='登入中...'; btn.disabled=true; }
-    try {
-      await window.doLogin(email, pwd);
-    } catch(err){}
+    if(errEl) errEl.textContent='';
+
+    await window.doLogin(email, pwd);
+
     if(btn){ btn.textContent='登入'; btn.disabled=false; }
     document.getElementById('loginPwd').value = '';
   };
@@ -474,7 +480,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
           onkeydown="if(event.key==='Enter')window.submitLogin()">
       </div>
       <div id="loginError" style="font-size:12px;color:#c94a20;margin-bottom:8px;min-height:16px;text-align:center"></div>
-      <button onclick="window.submitLogin()" style="width:100%;padding:11px;background:#1a1a1a;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit;font-weight:500">登入</button>
+      <button id="loginSubmitBtn" onclick="window.submitLogin()" style="width:100%;padding:11px;background:#1a1a1a;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit;font-weight:500">登入</button>
       <button onclick="window.cancelLogin()" style="width:100%;padding:8px;background:none;border:1px solid #ddd;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;margin-top:8px;color:#888">取消</button>
     </div>
   </div>
