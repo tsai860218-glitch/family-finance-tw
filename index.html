@@ -31,6 +31,22 @@
   const db   = getDatabase(app);
   const auth = getAuth(app);
 
+  // 立即掛上 doLogin / doLogout（module 頂部，盡早可用）
+  window.doLogin = async function(email, password){
+    const errEl = document.getElementById('loginError');
+    if(errEl) errEl.textContent = '';
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch(e) {
+      const msg = e.code==='auth/wrong-password'||e.code==='auth/invalid-credential' ? '密碼錯誤，請再試一次'
+                : e.code==='auth/user-not-found' ? '帳號不存在'
+                : e.code==='auth/too-many-requests' ? '嘗試次數過多，請稍後再試'
+                : '登入失敗：' + e.code;
+      if(errEl) errEl.textContent = msg;
+    }
+  };
+  window.doLogout = ()=> signOut(auth);
+
   const DEF_MEMBERS = [
     { id:"A", name:"成員 A", avatar:"🐱" },
     { id:"B", name:"成員 B", avatar:"🐶" }
@@ -132,20 +148,6 @@
     }
   });
 
-  window.doLogin = async function(email, password){
-    const errEl = document.getElementById('loginError');
-    if(errEl) errEl.textContent = '';
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch(e) {
-      const msg = e.code==='auth/wrong-password'||e.code==='auth/invalid-credential' ? '密碼錯誤，請再試一次'
-                : e.code==='auth/user-not-found' ? '帳號不存在'
-                : e.code==='auth/too-many-requests' ? '嘗試次數過多，請稍後再試'
-                : '登入失敗：' + e.message;
-      if(errEl) errEl.textContent = msg;
-    }
-  };
-  window.doLogout = ()=> signOut(auth);
 
 </script>
 <style>
@@ -434,15 +436,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 
     if(!email){ if(errEl) errEl.textContent='請先選擇成員'; return; }
     if(!pwd){ if(errEl) errEl.textContent='請輸入密碼'; return; }
-
-    // 等 doLogin 掛上來
-    let tries = 0;
-    while(!window.doLogin && tries < 30){ await new Promise(r=>setTimeout(r,100)); tries++; }
-    if(!window.doLogin){ if(errEl) errEl.textContent='系統載入中，請稍後再試'; return; }
+    if(errEl) errEl.textContent='';
 
     const btn = document.getElementById('loginSubmitBtn');
     if(btn){ btn.textContent='登入中...'; btn.disabled=true; }
-    if(errEl) errEl.textContent='';
+
+    // 等 Firebase Auth 初始化，最多 10 秒
+    let tries = 0;
+    while(!window.doLogin && tries < 100){
+      await new Promise(r=>setTimeout(r,100));
+      tries++;
+    }
+
+    if(!window.doLogin){
+      if(errEl) errEl.textContent='網路連線中，請稍候再按一次登入';
+      if(btn){ btn.textContent='登入'; btn.disabled=false; }
+      return;
+    }
 
     await window.doLogin(email, pwd);
 
