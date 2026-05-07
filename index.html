@@ -409,6 +409,51 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 
 @media(max-width:500px){.fr.t3{grid-template-columns:1fr 1fr}}
 </style>
+<!-- 登入互動函數（需在 HTML onclick 前定義） -->
+<script>
+  window._loginMid = null;
+
+  window.selectMember = function(mid){
+    window._loginMid = mid;
+    const names = {A:'🐱 花花', B:'🐶 成員 B'};
+    const whoEl = document.getElementById('loginWho');
+    if(whoEl) whoEl.textContent = (names[mid]||mid) + '，請輸入密碼';
+    const formEl = document.getElementById('loginForm');
+    if(formEl) formEl.style.display = 'block';
+    const errEl = document.getElementById('loginError');
+    if(errEl) errEl.textContent = '';
+    setTimeout(()=>document.getElementById('loginPwd')?.focus(), 100);
+  };
+
+  window.submitLogin = async function(){
+    const mid = window._loginMid;
+    const EMAILS = {A:'celia@family.com', B:'john@family.com'};
+    const email = EMAILS[mid];
+    const pwd = document.getElementById('loginPwd')?.value || '';
+    if(!email || !pwd){
+      const e = document.getElementById('loginError');
+      if(e) e.textContent = '請輸入密碼';
+      return;
+    }
+    const btn = document.querySelector('#loginForm button');
+    if(btn){ btn.textContent='登入中...'; btn.disabled=true; }
+    try {
+      await window.doLogin(email, pwd);
+    } catch(err){}
+    if(btn){ btn.textContent='登入'; btn.disabled=false; }
+    document.getElementById('loginPwd').value = '';
+  };
+
+  window.cancelLogin = function(){
+    window._loginMid = null;
+    const f = document.getElementById('loginForm');
+    if(f) f.style.display = 'none';
+    const p = document.getElementById('loginPwd');
+    if(p) p.value = '';
+    const e = document.getElementById('loginError');
+    if(e) e.textContent = '';
+  };
+</script>
 </head>
 <body>
 <!-- Login Screen -->
@@ -1936,42 +1981,11 @@ function renderLoginMembers(){
   }).join('');
 }
 
-window.selectMember = function(mid){
-  window._loginMid = mid;
-  const defaults=[{id:'A',name:'花花',avatar:'🐱'},{id:'B',name:'成員 B',avatar:'🐶'}];
-  const mems=window.members.length ? window.members : defaults;
-  const mem=mems.find(m=>m.id===mid);
-  const whoEl=document.getElementById('loginWho');
-  if(whoEl&&mem) whoEl.textContent=mem.avatar+' '+mem.name+'，請輸入密碼';
-  const formEl=document.getElementById('loginForm');
-  if(formEl) formEl.style.display='block';
-  const errEl=document.getElementById('loginError');
-  if(errEl) errEl.textContent='';
-  setTimeout(()=>document.getElementById('loginPwd')?.focus(),100);
-};
 
-window.submitLogin = async function(){
-  const mid=window._loginMid;
-  const email=MEMBER_EMAILS[mid];
-  const pwd=document.getElementById('loginPwd')?.value||'';
-  if(!email||!pwd){
-    const errEl=document.getElementById('loginError');
-    if(errEl) errEl.textContent='請輸入密碼';
-    return;
-  }
-  const btn=document.querySelector('#loginForm button');
-  if(btn){ btn.textContent='登入中...'; btn.disabled=true; }
-  await window.doLogin(email, pwd);
-  if(btn){ btn.textContent='登入'; btn.disabled=false; }
-  document.getElementById('loginPwd').value='';
-};
 
-window.cancelLogin = function(){
-  window._loginMid=null;
-  document.getElementById('loginForm').style.display='none';
-  document.getElementById('loginPwd').value='';
-  document.getElementById('loginError').textContent='';
-};
+
+
+
 
 // 初始化登入頁（等 DOM 就緒）
 if(document.readyState==='loading'){
