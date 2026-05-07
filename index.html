@@ -447,7 +447,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
     if(errEl) errEl.textContent='';
     if(btn){ btn.textContent='登入中...'; btn.disabled=true; }
 
-    // 用 Firebase REST API 登入，不依賴 module 載入
+    // 先用 REST API 驗證帳密（速度快、不依賴 module）
     const API_KEY = 'AIzaSyAqfmw0Valf69ZfIbq4Ftf8hb269ayqNak';
     try {
       const res = await fetch(
@@ -457,7 +457,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
       );
       const data = await res.json();
       if(data.error){
-        const code = data.error.message;
+        const code = data.error.message||'';
         const msg = code.includes('INVALID_PASSWORD')||code.includes('INVALID_LOGIN_CREDENTIALS') ? '密碼錯誤，請再試一次'
                   : code.includes('EMAIL_NOT_FOUND') ? '帳號不存在'
                   : code.includes('TOO_MANY_ATTEMPTS') ? '嘗試次數過多，請稍後再試'
@@ -466,17 +466,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
         if(btn){ btn.textContent='登入'; btn.disabled=false; }
         return;
       }
-      // 登入成功 — 用 idToken 讓 Firebase Auth module 接手
+      // REST 驗證成功 → 用 SDK 登入讓 onAuthStateChanged 觸發
       if(window.doLogin){
         await window.doLogin(email, pwd);
       } else {
-        // module 還沒好，手動觸發 app 顯示
+        // SDK 還沒好，直接手動進入 App
         window.currentMemberId = mid;
         document.getElementById('loginScreen').style.display='none';
         document.getElementById('appScreen').style.display='block';
-        if(!window.fbReady && window.startListeners) window.startListeners();
+        if(window.startListeners && !window.fbReady) window.startListeners();
       }
     } catch(e){
+      console.error('submitLogin error:', e);
       if(errEl) errEl.textContent = '網路錯誤，請檢查連線後重試';
     }
     if(btn){ btn.textContent='登入'; btn.disabled=false; }
