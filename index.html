@@ -36,12 +36,18 @@
     const errEl = document.getElementById('loginError');
     if(errEl) errEl.textContent = '';
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // 加 timeout 10 秒
+      const loginPromise = signInWithEmailAndPassword(auth, email, password);
+      const timeoutPromise = new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),10000));
+      await Promise.race([loginPromise, timeoutPromise]);
     } catch(e) {
-      const msg = e.code==='auth/wrong-password'||e.code==='auth/invalid-credential' ? '密碼錯誤，請再試一次'
+      console.error('Login error:', e.code, e.message);
+      const msg = e.message==='timeout' ? '連線逾時，請檢查網路後再試'
+                : e.code==='auth/wrong-password'||e.code==='auth/invalid-credential' ? '密碼錯誤，請再試一次'
                 : e.code==='auth/user-not-found' ? '帳號不存在'
                 : e.code==='auth/too-many-requests' ? '嘗試次數過多，請稍後再試'
-                : '登入失敗：' + e.code;
+                : e.code==='auth/network-request-failed' ? '網路連線失敗，請重新整理'
+                : '登入失敗：' + (e.code||e.message);
       if(errEl) errEl.textContent = msg;
     }
   };
@@ -441,20 +447,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
     const btn = document.getElementById('loginSubmitBtn');
     if(btn){ btn.textContent='登入中...'; btn.disabled=true; }
 
-    // 等 Firebase Auth 初始化，最多 10 秒
-    let tries = 0;
-    while(!window.doLogin && tries < 100){
-      await new Promise(r=>setTimeout(r,100));
-      tries++;
+    if(typeof window.doLogin === 'function'){
+      await window.doLogin(email, pwd);
+    } else {
+      if(errEl) errEl.textContent='系統尚未就緒，請重新整理頁面';
     }
-
-    if(!window.doLogin){
-      if(errEl) errEl.textContent='網路連線中，請稍候再按一次登入';
-      if(btn){ btn.textContent='登入'; btn.disabled=false; }
-      return;
-    }
-
-    await window.doLogin(email, pwd);
 
     if(btn){ btn.textContent='登入'; btn.disabled=false; }
     document.getElementById('loginPwd').value = '';
