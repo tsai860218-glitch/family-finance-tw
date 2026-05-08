@@ -569,7 +569,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
   <hr class="divider">
   <div id="cat_sort_bar"></div>
   <div class="sh">支出分類管理</div>
-  <div class="tip">拖曳 ☰ 調整順序，點標籤切換固定／不固定，完成後點「確定」儲存。</div>
+  <div class="tip">拖曳 ☰ 調整順序，點標籤切換固定／不固定，💡 切換是否顯示天數提示，完成後點「確定」儲存。</div>
   <div id="cat_list"></div>
   <div style="display:flex;gap:8px;margin-top:8px">
     <button class="btn" onclick="addCat('fixed')">＋ 固定支出</button>
@@ -643,6 +643,7 @@ function chMonth(d){
 
 function goTab(t){
   activeTab=t; window.activeTab=t;
+  try{ localStorage.setItem('lastTab', t); }catch(e){}
   ['ov','yr','bud','add','rec','mem','pool'].forEach(x=>{
     const el=document.getElementById('t'+x);if(el)el.style.display=t===x?'block':'none';
     const nb=document.getElementById('nb_'+x);if(nb)nb.classList.toggle('on',t===x);
@@ -743,7 +744,7 @@ window.renderOverview=function(){
                 <span style="font-size:11px;color:var(--text3)">已用 ${fmt(spent)}</span>
                 ${bgt>0?`<span style="font-size:11px;color:var(--text3)">預算 ${fmt(bgt)}</span>`:''}
               </div>
-              ${bgt>0?daysHintHTML(spent,bgt):''}
+              ${bgt>0?daysHintHTML(spent,bgt,c.id):''}
             </div>
           </div>`;
         }).join('');
@@ -1140,7 +1141,10 @@ function addRecord(){
 /* ── 明細 ── */
 function renderRec(){
   const fp=document.getElementById('fPerson');
+  const prevVal=fp.value||getLastRecPerson(); // 優先用目前值，否則用記憶值
   fp.innerHTML=`<option value="all">全部成員</option>`+window.members.map(m=>`<option value="${m.id}">${m.avatar} ${m.name}</option>`).join('');
+  if(prevVal) fp.value=prevVal;
+  saveLastRecPerson(fp.value); // 儲存目前選擇
   const kw=(document.getElementById('recSearch')?.value||'').toLowerCase().trim();
   const recs=getFilteredRecs();
   const fm=document.getElementById('fMonth')?.value||'current';
@@ -1291,6 +1295,7 @@ function renderMembers(){
       <span style="font-size:20px;cursor:pointer" onclick="toggleCIP('${c.id}')">${c.icon}</span>
       <input class="cni" value="${c.name}" onchange="updateCatNameDraft('${c.id}',this.value)">
       <span class="type-badge ${c.type==='fixed'?'fixed':'variable'}" onclick="toggleCatType('${c.id}')">${c.type==='fixed'?'固定':'不固定'}</span>
+      <span title="${c.showHint===false?'不顯示天數提示':'顯示天數提示'}" style="font-size:16px;cursor:pointer;opacity:${c.showHint===false?0.3:1}" onclick="toggleCatHint('${c.id}')">💡</span>
       <button class="btn del sm" onclick="deleteCatDraft('${c.id}')">刪除</button>
     </div>
     <div id="cip_${c.id}" style="display:none;padding:0 8px 8px">
@@ -1323,6 +1328,12 @@ function toggleCatType(id){
   initDraft();
   const c=catDraft.find(x=>x.id===id);if(!c)return;
   c.type=c.type==='fixed'?'variable':'fixed';
+  renderMembers();
+}
+function toggleCatHint(id){
+  initDraft();
+  const c=catDraft.find(x=>x.id===id);if(!c)return;
+  c.showHint = c.showHint===false ? true : false;
   renderMembers();
 }
 function updateCatNameDraft(id,val){
@@ -1424,6 +1435,7 @@ window.delMember=delMember;
 window.addMember=addMember;
 window.initDraft=initDraft;
 window.toggleCatType=toggleCatType;
+window.toggleCatHint=toggleCatHint;
 window.updateCatNameDraft=updateCatNameDraft;
 window.setCatIconDraft=setCatIconDraft;
 window.deleteCatDraft=deleteCatDraft;
@@ -1951,15 +1963,19 @@ function daysLeftInMonth(){
   const last=new Date(now.getFullYear(),now.getMonth()+1,0);
   return last.getDate()-now.getDate()+1;
 }
-function daysHintHTML(spent, budget){
+function daysHintHTML(spent, budget, catId){
   if(!budget||budget<=0) return '';
+  // 檢查此分類是否顯示提示
+  const cat=window.cats.find(c=>c.id===catId);
+  if(cat&&cat.showHint===false) return '';
   const y=curMonth.getFullYear(), m=curMonth.getMonth();
   const now=new Date();
   const isCur=now.getFullYear()===y&&now.getMonth()===m;
   if(!isCur) return '';
   const days=daysLeftInMonth();
   const remain=budget-spent;
-  if(remain<=0) return `<div class="days-hint danger">已超出預算</div>`;
+  if(remain<0) return `<div class="days-hint danger">已超出預算 ${fmt(Math.abs(remain))}</div>`;
+  if(remain===0) return `<div class="days-hint warn">已達預算上限</div>`;
   const perDay=Math.round(remain/days);
   const cls=perDay<100?'danger':perDay<300?'warn':'';
   return `<div class="days-hint ${cls}">剩 ${days} 天，每天還能花 ${fmt(perDay)}</div>`;
@@ -2013,6 +2029,12 @@ function saveLastRecord(person){
 function getLastRecord(){
   try{ return {person:localStorage.getItem('lastPerson')}; }
   catch(e){ return {}; }
+}
+function saveLastRecPerson(person){
+  try{ localStorage.setItem('lastRecPerson', person); }catch(e){}
+}
+function getLastRecPerson(){
+  try{ return localStorage.getItem('lastRecPerson')||'all'; }catch(e){ return 'all'; }
 }
 
 /* ══ 固定支出自動記帳 ══ */
@@ -2174,6 +2196,13 @@ window.updateAll=function(){
 window.addEventListener('online',()=>document.getElementById('sd').classList.remove('off'));
 window.addEventListener('offline',()=>document.getElementById('sd').classList.add('off'));
 window.updateMonthLabel();
+// 恢復上次停留的頁籤（記帳頁除外，重開不應停在那）
+try{
+  const lastTab=localStorage.getItem('lastTab');
+  if(lastTab&&lastTab!=='add'&&['ov','yr','bud','rec','mem','pool'].includes(lastTab)){
+    goTab(lastTab);
+  }
+}catch(e){}
 </script>
 </body>
 </html>
