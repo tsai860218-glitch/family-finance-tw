@@ -80,6 +80,7 @@
       window.updateMonthLabel();
       try { window.renderSummaryCard(); } catch(e){ console.warn('summary',e); }
       try { window.renderOverview(); } catch(e){ console.warn('overview',e); }
+      try { checkAutoRecs(); } catch(e){}
     } else { window.updateAll(); }
   });
 
@@ -95,6 +96,41 @@
 </script>
 <style>
 :root{
+  --bg:#f7f7f3;--surface:#fff;--surface2:#f2f2ee;
+  --border:#e8e8e2;--border2:#d8d8d0;
+  --text:#18181a;--text2:#6b6b6f;--text3:#a8a8aa;
+  --green:#0f8a5f;--green-bg:#e6f5ef;--green-text:#085041;
+  --red:#c94a20;--red-bg:#faeae5;--red-text:#7a2a10;
+  --blue:#1557a0;--blue-bg:#e6f0fb;--blue-text:#0c3d78;
+  --amber:#a06010;--amber-bg:#fdf0dc;--amber-text:#6b3e05;
+  --purple:#5b4ec8;
+  --radius:12px;--radius-sm:8px;--radius-pill:99px;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+}
+/* light override closes */
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111113;--surface:#1c1c1e;--surface2:#2c2c2e;
+    --border:#3a3a3c;--border2:#48484a;
+    --text:#f5f5f7;--text2:#aeaeb2;--text3:#636366;
+    --green:#30d158;--green-bg:#0d2e1a;--green-text:#30d158;
+    --red:#ff6b6b;--red-bg:#2e0d0d;--red-text:#ff6b6b;
+    --blue:#4da3ff;--blue-bg:#0d1e2e;--blue-text:#4da3ff;
+    --amber:#ffd60a;--amber-bg:#2e2600;--amber-text:#ffd60a;
+    --shadow:0 1px 3px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111113;--surface:#1c1c1e;--surface2:#2c2c2e;
+  --border:#3a3a3c;--border2:#48484a;
+  --text:#f5f5f7;--text2:#aeaeb2;--text3:#636366;
+  --green:#30d158;--green-bg:#0d2e1a;--green-text:#30d158;
+  --red:#ff6b6b;--red-bg:#2e0d0d;--red-text:#ff6b6b;
+  --blue:#4da3ff;--blue-bg:#0d1e2e;--blue-text:#4da3ff;
+  --amber:#ffd60a;--amber-bg:#2e2600;--amber-text:#ffd60a;
+  --shadow:0 1px 3px rgba(0,0,0,.3);
+}
+:root[data-theme="light"]{
   --bg:#f7f7f3;--surface:#fff;--surface2:#f2f2ee;
   --border:#e8e8e2;--border2:#d8d8d0;
   --text:#18181a;--text2:#6b6b6f;--text3:#a8a8aa;
@@ -353,6 +389,47 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 .pool-tab.on{background:var(--text);color:#fff;border-color:var(--text)}
 
 @media(max-width:500px){.fr.t3{grid-template-columns:1fr 1fr}}
+/* ─ 動畫 ─ */
+[id^="t"]{animation:fadeIn .18s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.rrow:active{background:var(--surface2)}
+.pb{transition:width .5s cubic-bezier(.4,0,.2,1)}
+.btn{transition:background .15s}
+.bnav-btn{transition:color .15s}
+
+/* ─ 空白頁 ─ */
+.empty-state{display:flex;flex-direction:column;align-items:center;padding:3rem 1rem;gap:10px;text-align:center}
+.empty-state .es-icon{font-size:52px;opacity:.35;line-height:1}
+.empty-state .es-title{font-size:15px;font-weight:500;color:var(--text2)}
+.empty-state .es-sub{font-size:13px;color:var(--text3);line-height:1.6;max-width:240px}
+
+/* ─ 剩餘天數 ─ */
+.days-hint{font-size:11px;color:var(--text3);margin-top:3px}
+.days-hint.warn{color:var(--amber)}.days-hint.danger{color:var(--red)}
+
+/* ─ 趨勢 ─ */
+.trend-up{color:var(--red);font-size:11px;margin-left:3px}
+.trend-down{color:var(--green);font-size:11px;margin-left:3px}
+.trend-flat{color:var(--text3);font-size:11px;margin-left:3px}
+
+/* ─ 深色切換 ─ */
+.theme-toggle{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;box-shadow:var(--shadow)}
+.ts-switch{position:relative;width:44px;height:26px;cursor:pointer;flex-shrink:0}
+.ts-switch input{opacity:0;width:0;height:0;position:absolute}
+.ts-slider{position:absolute;inset:0;background:var(--border2);border-radius:99px;transition:.25s}
+.ts-slider:before{content:'';position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.ts-switch input:checked+.ts-slider{background:var(--blue)}
+.ts-switch input:checked+.ts-slider:before{transform:translateX(18px)}
+
+/* ─ 備註建議 ─ */
+.note-sugs{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;min-height:0}
+.note-sug{padding:3px 10px;border-radius:99px;border:1px solid var(--border);background:var(--surface2);font-size:12px;color:var(--text2);cursor:pointer;font-family:inherit;transition:background .12s}
+.note-sug:hover{background:var(--border2);color:var(--text)}
+
+/* ─ 自動記帳 ─ */
+.auto-item{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:7px;box-shadow:var(--shadow)}
+.auto-badge{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--blue-bg);color:var(--blue-text);flex-shrink:0;white-space:nowrap}
+
 </style>
 </head>
 <body>
@@ -433,7 +510,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
       <div class="fg"><label>日期</label><input type="date" id="aDate"></div>
     </div>
     <div class="fr" style="grid-template-columns:1fr">
-      <div class="fg"><label>備註（選填）</label><input type="text" id="aNote" placeholder="說明..."></div>
+      <div class="fg"><label>備註（選填）</label><input type="text" id="aNote" placeholder="說明..." oninput="showNoteSugs()" onfocus="showNoteSugs()"><div class="note-sugs" id="noteSugs"></div></div>
     </div>
     <div class="fr" style="grid-template-columns:1fr 1fr;margin-bottom:4px">
       <div class="fg"><label>分期標註（選填）</label><input type="text" id="aInstall" placeholder="如 1/6、3/12"></div>
@@ -465,6 +542,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
       <option value="current">本月</option>
       <option value="all">全部月份</option>
     </select>
+    <select id="fSort" onchange="renderRec()" style="font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);font-family:inherit;color:var(--text)">
+      <option value="date_desc">日期（新→舊）</option>
+      <option value="date_asc">日期（舊→新）</option>
+      <option value="amount_desc">金額（高→低）</option>
+      <option value="amount_asc">金額（低→高）</option>
+      <option value="cat_asc">分類排序</option>
+    </select>
     <button class="export-btn" onclick="exportExcel()">📥 匯出</button>
   </div>
   <div id="rec_count" style="font-size:12px;color:var(--text3);margin-bottom:8px"></div>
@@ -472,6 +556,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 </div>
 
 <div id="tmem" style="display:none">
+  <div class="theme-toggle">
+    <span style="font-size:14px;color:var(--text)">🌙 深色模式</span>
+    <label class="ts-switch">
+      <input type="checkbox" id="darkToggle" onchange="setTheme(this.checked?'dark':'light')">
+      <span class="ts-slider"></span>
+    </label>
+  </div>
   <div class="sh">成員</div>
   <div class="tip" style="margin-top:-4px">點頭像換圖示，名稱可直接編輯</div>
   <div id="mem_cards"></div>
@@ -484,6 +575,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
     <button class="btn" onclick="addCat('fixed')">＋ 固定支出</button>
     <button class="btn" onclick="addCat('variable')">＋ 不固定支出</button>
   </div>
+  <hr class="divider">
+  <div class="sh">固定支出自動記帳</div>
+  <div class="tip">每月開啟 App 時自動提示記帳，省去重複手動填。</div>
+  <div id="auto_rec_list"></div>
+  <button class="btn" onclick="openAutoRecModal()" style="margin-top:6px">＋ 新增自動項目</button>
 </div>
 
 <div id="tpool" style="display:none">
@@ -551,7 +647,7 @@ function goTab(t){
     const el=document.getElementById('t'+x);if(el)el.style.display=t===x?'block':'none';
     const nb=document.getElementById('nb_'+x);if(nb)nb.classList.toggle('on',t===x);
   });
-  if(t==='ov'){renderSummaryCard();renderOverview();checkNewMonthBudget();}
+  if(t==='ov'){renderSummaryCard();renderOverview();checkNewMonthBudget();checkAutoRecs();}
   else if(t==='yr') renderYearly();
   else if(t==='bud') renderBudget();
   else if(t==='add') renderAddForm();
@@ -639,7 +735,7 @@ window.renderOverview=function(){
             <span style="font-size:16px;width:22px;text-align:center;flex-shrink:0">${c.icon}</span>
             <div style="flex:1;min-width:0">
               <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-                <span style="font-size:13px;color:var(--text)">${c.name}</span>
+                <span style="font-size:13px;color:var(--text)">${c.name}${trendHTML(spent,c.name)}</span>
                 <span style="font-size:11px;color:${over?'var(--red)':'var(--text2)'}">${bgt>0?(over?'超 '+fmt(Math.abs(bgt-spent)):'餘 '+fmt(bgt-spent)):'未設預算'}</span>
               </div>
               <div class="pw"><div class="pb" style="width:${pct}%;background:${bc}"></div></div>
@@ -647,6 +743,7 @@ window.renderOverview=function(){
                 <span style="font-size:11px;color:var(--text3)">已用 ${fmt(spent)}</span>
                 ${bgt>0?`<span style="font-size:11px;color:var(--text3)">預算 ${fmt(bgt)}</span>`:''}
               </div>
+              ${bgt>0?daysHintHTML(spent,bgt):''}
             </div>
           </div>`;
         }).join('');
@@ -995,8 +1092,12 @@ function refreshCatSel(){
   }
 }
 function renderAddForm(){
-  document.getElementById('aPerson').innerHTML=window.members.map(m=>`<option value="${m.id}">${m.avatar} ${m.name}</option>`).join('');
-  // 日期：若 curMonth 是當月用今天，否則用 curMonth 的 1 號
+  const last=getLastRecord();
+  const pSel=document.getElementById('aPerson');
+  pSel.innerHTML=window.members.map(m=>`<option value="${m.id}">${m.avatar} ${m.name}</option>`).join('');
+  // 記憶上次成員
+  if(last.person&&window.members.find(m=>m.id===last.person)) pSel.value=last.person;
+  // 日期跟月份
   const now=new Date();
   const isCurMonth=curMonth.getFullYear()===now.getFullYear()&&curMonth.getMonth()===now.getMonth();
   const d=isCurMonth?now:new Date(curMonth.getFullYear(),curMonth.getMonth(),1);
@@ -1015,6 +1116,7 @@ function addRecord(){
   const note=install?`${noteRaw?noteRaw+' ':''}[分期 ${install}]`:noteRaw;
   if(!amount){alert('請輸入金額');return;}
   window.fbAddRecord({type,person,category,amount,note,date});
+  if(type==='expense') saveLastRecord(person);
   const saveQuick=document.getElementById('aSaveQuick')?.checked;
   if(saveQuick&&noteRaw){
     const cat=window.cats.find(c=>c.name===category);
@@ -1045,7 +1147,12 @@ function renderRec(){
   const countEl=document.getElementById('rec_count');
   if(countEl) countEl.textContent=recs.length?`共 ${recs.length} 筆${fm==='all'?'（全部月份）':''}`:' ';
   const el=document.getElementById('rec_list');
-  if(!recs.length){el.innerHTML='<div class="nrec">'+(kw?'找不到符合的記錄':'沒有記錄')+'</div>';return;}
+  if(!recs.length){
+    el.innerHTML=kw
+      ? emptyHTML('🔍','找不到符合的記錄','試試其他關鍵字，或切換到全部月份')
+      : emptyHTML('📋','本月沒有記錄','點底部「＋」開始記帳');
+    return;
+  }
   const hi=(text)=>kw?text.replace(new RegExp(`(${kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'),'<mark style="background:#ffe066;border-radius:2px">$1</mark>'):text;
   el.innerHTML=recs.map(r=>{
     const isI=r.type==='income';
@@ -1170,6 +1277,10 @@ function renderMembers(){
 
   /* 分類列表 */
   const working=catDraft?catDraft:sortedCats(window.cats);
+  // 同步深色切換狀態
+  const tog=document.getElementById('darkToggle');
+  if(tog) tog.checked=document.documentElement.getAttribute('data-theme')==='dark';
+  renderAutoRecList();
   document.getElementById('cat_list').innerHTML=working.map((c,i)=>`
     <div class="cat-item" id="ci_${c.id}" draggable="true"
       ondragstart="dragStart(event,'${c.id}')"
@@ -1509,7 +1620,14 @@ function getFilteredRecs(){
   if(fm==='all'&&pf!=='all') recs=recs.filter(r=>r.person===pf);
   if(tf!=='all') recs=recs.filter(r=>r.type===tf);
   if(kw) recs=recs.filter(r=>(r.category+' '+(r.note||'')).toLowerCase().includes(kw));
-  return recs.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  // 排序
+  const sort=document.getElementById('fSort')?.value||'date_desc';
+  if     (sort==='date_desc')   recs=recs.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  else if(sort==='date_asc')    recs=recs.slice().sort((a,b)=>a.date.localeCompare(b.date));
+  else if(sort==='amount_desc') recs=recs.slice().sort((a,b)=>b.amount-a.amount);
+  else if(sort==='amount_asc')  recs=recs.slice().sort((a,b)=>a.amount-b.amount);
+  else if(sort==='cat_asc')     recs=recs.slice().sort((a,b)=>a.category.localeCompare(b.category,'zh-Hant'));
+  return recs;
 }
 
 /* ══ 5. 新月份預算提示 ══ */
@@ -1803,6 +1921,246 @@ function delPoolTx(key, memberId, idx){
   renderPool();
 }
 window.delPoolTx=delPoolTx;
+
+
+/* ══ 深色模式 ══ */
+function setTheme(mode){
+  document.documentElement.setAttribute('data-theme', mode);
+  localStorage.setItem('theme', mode);
+  const tog = document.getElementById('darkToggle');
+  if(tog) tog.checked = mode==='dark';
+}
+function initTheme(){
+  const saved = localStorage.getItem('theme');
+  if(saved){ setTheme(saved); return; }
+  // 跟隨系統
+  if(window.matchMedia('(prefers-color-scheme:dark)').matches) setTheme('dark');
+  else setTheme('light');
+}
+window.setTheme = setTheme;
+initTheme();
+
+/* ══ 空白頁 ══ */
+function emptyHTML(icon, title, sub){
+  return `<div class="empty-state"><div class="es-icon">${icon}</div><div class="es-title">${title}</div><div class="es-sub">${sub}</div></div>`;
+}
+
+/* ══ 剩餘天數計算 ══ */
+function daysLeftInMonth(){
+  const now=new Date();
+  const last=new Date(now.getFullYear(),now.getMonth()+1,0);
+  return last.getDate()-now.getDate()+1;
+}
+function daysHintHTML(spent, budget){
+  if(!budget||budget<=0) return '';
+  const y=curMonth.getFullYear(), m=curMonth.getMonth();
+  const now=new Date();
+  const isCur=now.getFullYear()===y&&now.getMonth()===m;
+  if(!isCur) return '';
+  const days=daysLeftInMonth();
+  const remain=budget-spent;
+  if(remain<=0) return `<div class="days-hint danger">已超出預算</div>`;
+  const perDay=Math.round(remain/days);
+  const cls=perDay<100?'danger':perDay<300?'warn':'';
+  return `<div class="days-hint ${cls}">剩 ${days} 天，每天還能花 ${fmt(perDay)}</div>`;
+}
+
+/* ══ 趨勢箭頭 ══ */
+function trendHTML(curAmt, catName){
+  const now=new Date();
+  const y=curMonth.getFullYear(), m=curMonth.getMonth();
+  const prevD=new Date(y,m-1,1);
+  const prevRecs=getRecsYM(prevD.getFullYear(),prevD.getMonth());
+  const prevAmt=prevRecs.filter(r=>r.type==='expense'&&r.category===catName).reduce((s,r)=>s+r.amount,0);
+  if(!prevAmt) return '';
+  const diff=curAmt-prevAmt;
+  if(Math.abs(diff)<prevAmt*0.05) return '<span class="trend-flat">→</span>';
+  return diff>0
+    ? `<span class="trend-up">↑${Math.round(diff/prevAmt*100)}%</span>`
+    : `<span class="trend-down">↓${Math.round(Math.abs(diff)/prevAmt*100)}%</span>`;
+}
+
+/* ══ 備註建議 ══ */
+function showNoteSugs(){
+  const input=document.getElementById('aNote');
+  const cat=document.getElementById('aCat')?.value||'';
+  const val=(input?.value||'').toLowerCase();
+  const el=document.getElementById('noteSugs');
+  if(!el||!input) return;
+  // 從歷史記錄收集備註
+  const allNotes=window.records
+    .filter(r=>r.note&&(!cat||r.category===cat))
+    .map(r=>r.note)
+    .filter((n,i,a)=>n&&a.indexOf(n)===i)
+    .filter(n=>!val||n.toLowerCase().includes(val))
+    .slice(0,6);
+  el.innerHTML=allNotes.map(n=>
+    `<button type="button" class="note-sug" onclick="applyNoteSug('${n.replace(/'/g,"\'")}')">
+      ${n}
+    </button>`).join('');
+}
+function applyNoteSug(note){
+  const el=document.getElementById('aNote');
+  if(el){ el.value=note; document.getElementById('noteSugs').innerHTML=''; }
+}
+window.showNoteSugs=showNoteSugs;
+window.applyNoteSug=applyNoteSug;
+
+/* ══ 記帳記憶上次成員+分類 ══ */
+function saveLastRecord(person){
+  try{ localStorage.setItem('lastPerson', person); }catch(e){}
+}
+function getLastRecord(){
+  try{ return {person:localStorage.getItem('lastPerson')}; }
+  catch(e){ return {}; }
+}
+
+/* ══ 固定支出自動記帳 ══ */
+function getAutoRecs(){ try{ return JSON.parse(localStorage.getItem('autoRecs')||'[]'); }catch(e){return [];} }
+function saveAutoRecs(arr){ try{ localStorage.setItem('autoRecs', JSON.stringify(arr)); }catch(e){} }
+
+function renderAutoRecList(){
+  const el=document.getElementById('auto_rec_list'); if(!el) return;
+  const list=getAutoRecs();
+  if(!list.length){
+    el.innerHTML=emptyHTML('🔄','尚無自動記帳項目','新增後每月開啟 App 時自動提示');
+    return;
+  }
+  el.innerHTML=list.map((a,i)=>{
+    const cat=window.cats.find(c=>c.name===a.category);
+    const mem=window.members.find(m=>m.id===a.person);
+    return `<div class="auto-item">
+      <span style="font-size:18px">${cat?cat.icon:'📝'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;color:var(--text)">${a.note||a.category}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${mem?mem.avatar+' '+mem.name:a.person} · ${a.category} · 每月 ${a.day} 號 · ${fmt(a.amount)}</div>
+      </div>
+      <span class="auto-badge">每月</span>
+      <button class="btn del sm" onclick="delAutoRec(${i})">刪除</button>
+    </div>`;
+  }).join('');
+}
+window.renderAutoRecList=renderAutoRecList;
+
+function delAutoRec(idx){
+  if(!confirm('確定刪除？'))return;
+  const list=getAutoRecs(); list.splice(idx,1); saveAutoRecs(list);
+  renderAutoRecList();
+}
+window.delAutoRec=delAutoRec;
+
+function openAutoRecModal(){
+  const catOpts=window.cats.map(c=>`<option value="${c.name}">${c.icon} ${c.name}</option>`).join('');
+  const memOpts=window.members.map(m=>`<option value="${m.id}">${m.avatar} ${m.name}</option>`).join('');
+  const days=Array.from({length:28},(_,i)=>`<option value="${i+1}">${i+1} 號</option>`).join('');
+  document.getElementById('modal_root').innerHTML=`
+    <div class="modal-bg" onclick="closeModal(event)">
+      <div class="modal-box">
+        <div class="modal-hd"><span class="modal-title">新增自動記帳項目</span><button class="modal-close" onclick="closeModal(null,true)">×</button></div>
+        <div class="fr" style="margin-bottom:10px">
+          <div class="fg"><label>成員</label><select id="ar_person">${memOpts}</select></div>
+          <div class="fg"><label>每月幾號</label><select id="ar_day">${days}</select></div>
+        </div>
+        <div class="fr" style="margin-bottom:10px">
+          <div class="fg"><label>分類</label><select id="ar_cat">${catOpts}</select></div>
+          <div class="fg"><label>金額（NT$）</label><input type="tel" id="ar_amt" placeholder="0" inputmode="decimal"></div>
+        </div>
+        <div class="fg" style="margin-bottom:14px">
+          <label>說明</label>
+          <input type="text" id="ar_note" placeholder="例：房租、保險費">
+        </div>
+        <button class="btn pri" style="width:100%" onclick="confirmAutoRec()">確認新增</button>
+      </div>
+    </div>`;
+}
+window.openAutoRecModal=openAutoRecModal;
+
+function confirmAutoRec(){
+  const person=document.getElementById('ar_person').value;
+  const day=parseInt(document.getElementById('ar_day').value);
+  const category=document.getElementById('ar_cat').value;
+  const amount=parseFloat(document.getElementById('ar_amt').value)||0;
+  const note=document.getElementById('ar_note').value.trim();
+  if(!amount){alert('請輸入金額');return;}
+  const list=getAutoRecs();
+  list.push({person,day,category,amount,note});
+  saveAutoRecs(list);
+  closeModal(null,true);
+  renderAutoRecList();
+  showToast('已新增自動記帳項目！');
+}
+window.confirmAutoRec=confirmAutoRec;
+
+function checkAutoRecs(){
+  const list=getAutoRecs(); if(!list.length) return;
+  const now=new Date();
+  const ym=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const done=JSON.parse(localStorage.getItem('autoRecDone_'+ym)||'[]');
+  const pending=list.reduce((acc,a,i)=>{
+    if(!done.includes(i)&&now.getDate()>=a.day) acc.push({a,i});
+    return acc;
+  },[]);
+  if(!pending.length) return;
+  const rows=pending.map(({a,i})=>{
+    const cat=window.cats.find(c=>c.name===a.category);
+    const mem=window.members.find(m=>m.id===a.person);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:20px">${cat?cat.icon:'📝'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:500;color:var(--text)">${a.note||a.category}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${mem?mem.avatar+' '+mem.name:a.person} · ${a.category} · ${a.day}號</div>
+      </div>
+      <div style="font-size:15px;font-weight:500;color:var(--red);flex-shrink:0;margin-right:8px">-${fmt(a.amount)}</div>
+      <button class="btn sm pri" onclick="doAutoRec(${i},'${ym}')">記帳</button>
+    </div>`;
+  }).join('');
+  document.getElementById('modal_root').innerHTML=`
+    <div class="modal-bg" onclick="closeModal(event)">
+      <div class="modal-box">
+        <div class="modal-hd">
+          <span class="modal-title">📋 本月固定支出</span>
+          <button class="modal-close" onclick="closeModal(null,true)">×</button>
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">以下項目已到期，請確認記帳</div>
+        <div style="margin-bottom:14px">${rows}</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn pri" style="flex:1" onclick="doAllAutoRec(${JSON.stringify(pending.map(p=>p.i))},'${ym}')">全部記帳</button>
+          <button class="btn" style="flex:1" onclick="closeModal(null,true)">稍後再說</button>
+        </div>
+      </div>
+    </div>`;
+}
+window.checkAutoRecs=checkAutoRecs;
+
+function doAutoRec(idx, ym){
+  const a=getAutoRecs()[idx]; if(!a) return;
+  const now=new Date();
+  const date=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(a.day).padStart(2,'0')}`;
+  window.fbAddRecord({type:'expense',person:a.person,category:a.category,amount:a.amount,note:a.note||a.category,date});
+  const done=JSON.parse(localStorage.getItem('autoRecDone_'+ym)||'[]');
+  done.push(idx);
+  localStorage.setItem('autoRecDone_'+ym, JSON.stringify(done));
+  showToast(`✓ 已記帳：${a.note||a.category} ${fmt(a.amount)}`);
+  closeModal(null,true);
+  setTimeout(checkAutoRecs, 400);
+}
+window.doAutoRec=doAutoRec;
+
+function doAllAutoRec(idxArr, ym){
+  const list=getAutoRecs();
+  const now=new Date();
+  const done=JSON.parse(localStorage.getItem('autoRecDone_'+ym)||'[]');
+  idxArr.forEach(i=>{
+    const a=list[i]; if(!a) return;
+    const date=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(a.day).padStart(2,'0')}`;
+    window.fbAddRecord({type:'expense',person:a.person,category:a.category,amount:a.amount,note:a.note||a.category,date});
+    done.push(i);
+  });
+  localStorage.setItem('autoRecDone_'+ym, JSON.stringify(done));
+  closeModal(null,true);
+  showToast(`✓ 已記帳 ${idxArr.length} 筆固定支出`);
+}
+window.doAllAutoRec=doAllAutoRec;
 
 window.updateAll=function(){
   window.updateMonthLabel();
