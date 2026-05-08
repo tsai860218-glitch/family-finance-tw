@@ -1965,20 +1965,12 @@ function daysLeftInMonth(){
 }
 function daysHintHTML(spent, budget, catId){
   if(!budget||budget<=0) return '';
-  // 檢查此分類是否顯示提示
   const cat=window.cats.find(c=>c.id===catId);
   if(cat&&cat.showHint===false) return '';
-  const y=curMonth.getFullYear(), m=curMonth.getMonth();
-  const now=new Date();
-  const isCur=now.getFullYear()===y&&now.getMonth()===m;
-  if(!isCur) return '';
-  const days=daysLeftInMonth();
   const remain=budget-spent;
   if(remain<0) return `<div class="days-hint danger">已超出預算 ${fmt(Math.abs(remain))}</div>`;
   if(remain===0) return `<div class="days-hint warn">已達預算上限</div>`;
-  const perDay=Math.round(remain/days);
-  const cls=perDay<100?'danger':perDay<300?'warn':'';
-  return `<div class="days-hint ${cls}">剩 ${days} 天，每天還能花 ${fmt(perDay)}</div>`;
+  return '';
 }
 
 /* ══ 趨勢箭頭 ══ */
