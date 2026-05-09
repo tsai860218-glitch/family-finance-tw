@@ -1738,6 +1738,7 @@ function evalAmt(val){
   }catch(e){return parseFloat(val)||0;}
 }
 window.previewCalc=previewCalc;
+function addAmt(v){
   const el=document.getElementById('aAmt');
   const cur=parseFloat(el.value)||0;
   el.value=cur+v;
