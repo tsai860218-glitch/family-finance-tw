@@ -389,6 +389,50 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 .pool-tab.on{background:var(--text);color:#fff;border-color:var(--text)}
 
 @media(max-width:500px){.fr.t3{grid-template-columns:1fr 1fr}}
+/* ─ 圓環圖摘要卡 ─ */
+.ring-summary{display:flex;align-items:center;gap:20px;padding:1.1rem 1.25rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:1rem;box-shadow:var(--shadow)}
+.ring-info{flex:1;min-width:0}
+.ring-surplus{font-size:26px;font-weight:500;letter-spacing:-.5px;margin:4px 0 6px}
+.ring-row{display:flex;gap:14px;font-size:12px;color:var(--text2);flex-wrap:wrap;margin-bottom:4px}
+.ring-legend{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)}
+.ring-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ring-vs{font-size:11px;color:var(--text3);margin-top:4px}
+
+/* ─ 分類大卡片格子 ─ */
+.cat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.cat-big-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+.cat-big-card.over{border-color:var(--red);background:var(--red-bg)}
+.cat-big-icon{font-size:22px;margin-bottom:6px;display:block}
+.cat-big-name{font-size:12px;color:var(--text2);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-big-amt{font-size:17px;font-weight:500;color:var(--text);margin-bottom:6px;letter-spacing:-.3px}
+.cat-big-bar{height:4px;border-radius:99px;background:var(--surface2);overflow:hidden;margin-bottom:4px}
+.cat-big-fill{height:4px;border-radius:99px}
+.cat-big-remain{font-size:10px}
+
+/* ─ 明細時間軸分組 ─ */
+.date-group{margin-bottom:14px}
+.date-group-label{font-size:11px;font-weight:500;color:var(--text3);padding:0 2px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
+.date-group-total{font-size:11px;color:var(--text3)}
+
+/* ─ 左滑刪除 ─ */
+.rrow-wrap{position:relative;overflow:hidden;border-radius:var(--radius);margin-bottom:7px}
+.rrow-del-bg{position:absolute;right:0;top:0;bottom:0;width:80px;background:var(--red);display:flex;align-items:center;justify-content:center;border-radius:0 var(--radius) var(--radius) 0}
+.rrow-del-bg span{color:#fff;font-size:13px;font-weight:500}
+.rrow{margin-bottom:0;border-radius:var(--radius);transition:transform .2s ease;touch-action:pan-y;position:relative;z-index:1}
+.rrow.swiped{transform:translateX(-80px)}
+
+/* ─ 記帳計算機 ─ */
+.calc-result{font-size:11px;color:var(--blue);margin-top:3px;min-height:16px}
+
+/* ─ 成員色彩選擇 ─ */
+.color-swatches{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.color-swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s}
+.color-swatch.active{border-color:var(--text);transform:scale(1.1)}
+
+/* ─ 盈餘數字動畫 ─ */
+@keyframes countUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.animate-count{animation:countUp .4s ease forwards}
+
 /* ─ 動畫 ─ */
 [id^="t"]{animation:fadeIn .18s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
@@ -494,7 +538,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
     <div id="income_hint" class="income-hint">💡 請確認日期為實際入帳當月，系統會依此月份計算收支。</div>
     <div class="fg" style="margin-bottom:8px">
       <label>金額（NT$）</label>
-      <input type="tel" id="aAmt" placeholder="0" inputmode="decimal" pattern="[0-9]*">
+      <input type="tel" id="aAmt" placeholder="0 或輸入算式如 120+85" inputmode="decimal" pattern="[0-9+\-*/.]*" oninput="previewCalc()">
+      <div id="calcPreview" style="font-size:12px;color:var(--blue);margin-top:4px;display:none"></div>
       <div class="amt-quick">
         <button type="button" class="amt-q-btn" onclick="addAmt(100)">+100</button>
         <button type="button" class="amt-q-btn" onclick="addAmt(500)">+500</button>
@@ -679,15 +724,52 @@ function renderSummaryCard(){
     const bgt=window.members.reduce((s,m)=>s+getBudget(ym,c.id,m.id),0);
     return bgt>0&&(catSpent[c.name]||0)>bgt;
   });
-  const surColor=sur>=0?'#4dd8a4':'#ff8866';
   const el=document.getElementById('ov_summary');
   if(!el) return;
-  el.innerHTML=`<div class="summary-card">
-    <div class="sc-title">${curMonth.getFullYear()} 年 ${curMonth.getMonth()+1} 月 · 本月盈餘</div>
-    <div class="sc-surplus" style="color:${surColor}">${sur>=0?'+':'-'}${fmt(Math.abs(sur))}</div>
-    <div class="sc-row"><span>收入 ${fmt(inc)}</span><span>支出 ${fmt(exp)}</span></div>
-    ${prevSur!==0?`<div class="sc-vs">與上月比較 ${diff>=0?'+':'-'}${fmt(Math.abs(diff))}</div>`:''}
-    ${overCats.length?`<div style="margin-top:10px">${overCats.map(c=>`<span class="ovr-badge">${c.icon} ${c.name} 超支</span>`).join('')}</div>`:''}
+
+  // 圓環圖 SVG
+  const R=38, CX=44, CY=44, CIRC=2*Math.PI*R;
+  const expPct = inc>0 ? Math.min(exp/inc,1) : 0;
+  const surPct = inc>0 ? Math.max((inc-exp)/inc,0) : 0;
+  const expDash = expPct*CIRC;
+  const surDash = surPct*CIRC;
+  const GAP=2;
+  const surColor=sur>=0?'var(--green)':'var(--red)';
+  const surLabel=sur>=0?`+${fmt(sur)}`:fmt(sur);
+  const ringHTML=`<svg width="88" height="88" viewBox="0 0 88 88" style="flex-shrink:0">
+    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="var(--surface2)" stroke-width="10"/>
+    ${inc>0?`
+    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="var(--red)" stroke-width="10"
+      stroke-dasharray="${expDash-GAP} ${CIRC-(expDash-GAP)}"
+      stroke-dashoffset="${CIRC*0.25}" stroke-linecap="round" transform="rotate(0 ${CX} ${CY})"/>
+    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="var(--green)" stroke-width="10"
+      stroke-dasharray="${Math.max(surDash-GAP,0)} ${CIRC-Math.max(surDash-GAP,0)}"
+      stroke-dashoffset="${CIRC*0.25-expDash}" stroke-linecap="round"/>
+    `:''}
+    <text x="${CX}" y="${CY-5}" text-anchor="middle" font-size="9" fill="var(--text3)">${curMonth.getMonth()+1}月</text>
+    <text x="${CX}" y="${CY+7}" text-anchor="middle" font-size="10" font-weight="500" fill="${surColor}">${sur>=0?'盈':'虧'}</text>
+  </svg>`;
+
+  const diffHTML=prevSur!==0
+    ?`<div class="ring-vs">與上月 ${diff>=0?'↑':'↓'} ${fmt(Math.abs(diff))}</div>`:'' ;
+  const overHTML=overCats.length
+    ?`<div style="margin-top:6px">${overCats.map(c=>`<span class="ovr-badge">${c.icon} ${c.name}</span>`).join('')}</div>`:'';
+
+  el.innerHTML=`<div class="ring-summary">
+    ${ringHTML}
+    <div class="ring-info">
+      <div style="font-size:11px;color:var(--text3)">${curMonth.getFullYear()}年${curMonth.getMonth()+1}月 盈餘</div>
+      <div class="ring-surplus animate-count" style="color:${surColor}">${surLabel}</div>
+      <div class="ring-row">
+        <span>↑ ${fmt(inc)}</span>
+        <span>↓ ${fmt(exp)}</span>
+      </div>
+      <div style="display:flex;gap:10px">
+        <span class="ring-legend"><span class="ring-dot" style="background:var(--green)"></span>收入</span>
+        <span class="ring-legend"><span class="ring-dot" style="background:var(--red)"></span>支出</span>
+      </div>
+      ${diffHTML}${overHTML}
+    </div>
   </div>`;
 }
 window.renderSummaryCard=renderSummaryCard;
@@ -727,30 +809,29 @@ window.renderOverview=function(){
       const renderGroup=(groupCats,groupLabel,badgeCls)=>{
         const active=groupCats.filter(c=>getBudget(ym,c.id,m.id)>0||catSpent[c.name]);
         if(!active.length) return '';
-        const rows=active.map(c=>{
+        const cards=active.map(c=>{
           const spent=catSpent[c.name]||0, bgt=getBudget(ym,c.id,m.id);
           const pct=bgt>0?Math.min(spent/bgt*100,100):0;
           const over=bgt>0&&spent>bgt;
+          const atLimit=bgt>0&&spent===bgt;
           const bc=over?'var(--red)':pct>80?'var(--amber)':color;
-          return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <span style="font-size:16px;width:22px;text-align:center;flex-shrink:0">${c.icon}</span>
-            <div style="flex:1;min-width:0">
-              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-                <span style="font-size:13px;color:var(--text)">${c.name}${trendHTML(spent,c.name)}</span>
-                <span style="font-size:11px;color:${over?'var(--red)':'var(--text2)'}">${bgt>0?(over?'超 '+fmt(Math.abs(bgt-spent)):'餘 '+fmt(bgt-spent)):'未設預算'}</span>
-              </div>
-              <div class="pw"><div class="pb" style="width:${pct}%;background:${bc}"></div></div>
-              <div style="display:flex;justify-content:space-between;margin-top:3px">
-                <span style="font-size:11px;color:var(--text3)">已用 ${fmt(spent)}</span>
-                ${bgt>0?`<span style="font-size:11px;color:var(--text3)">預算 ${fmt(bgt)}</span>`:''}
-              </div>
-              ${bgt>0?daysHintHTML(spent,bgt,c.id):''}
-            </div>
+          const remainTxt=bgt>0?(over?`<span style="color:var(--red)">超 ${fmt(Math.abs(bgt-spent))}</span>`
+            :(atLimit?`<span style="color:var(--amber)">已達上限</span>`
+            :`<span style="color:var(--text3)">餘 ${fmt(bgt-spent)}</span>`))
+            :`<span style="color:var(--text3)">未設預算</span>`;
+          const hintTxt=daysHintHTML(spent,bgt,c.id);
+          return `<div class="cat-big-card${over?' over':''}">
+            <span class="cat-big-icon">${c.icon}</span>
+            <div class="cat-big-name">${c.name}${trendHTML(spent,c.name)}</div>
+            <div class="cat-big-amt">${fmt(spent)}</div>
+            <div class="cat-big-bar"><div class="cat-big-fill" style="width:${pct}%;background:${bc}"></div></div>
+            <div class="cat-big-remain">${remainTxt}</div>
+            ${hintTxt}
           </div>`;
         }).join('');
-        return `<div style="margin-bottom:12px">
+        return `<div style="margin-bottom:14px">
           <div style="margin-bottom:8px"><span class="badge ${badgeCls}">${groupLabel}</span></div>
-          ${rows}
+          <div class="cat-grid">${cards}</div>
         </div>`;
       };
 
@@ -1109,7 +1190,7 @@ function renderAddForm(){
 function addRecord(){
   const type=document.getElementById('aType').value;
   const person=document.getElementById('aPerson').value;
-  const amount=parseFloat(document.getElementById('aAmt').value)||0;
+  const amount=evalAmt(document.getElementById('aAmt').value);
   const category=document.getElementById('aCat').value;
   const date=document.getElementById('aDate').value;
   const noteRaw=document.getElementById('aNote').value.trim();
@@ -1128,7 +1209,7 @@ function addRecord(){
   } else {
     showToast('記帳完成！');
   }
-  document.getElementById('aAmt').value='';
+  document.getElementById('aAmt').value='';const cp=document.getElementById('calcPreview');if(cp)cp.style.display='none';
   document.getElementById('aNote').value='';
   if(document.getElementById('aInstall')) document.getElementById('aInstall').value='';
   if(document.getElementById('aSaveQuick')) document.getElementById('aSaveQuick').checked=false;
@@ -1158,19 +1239,47 @@ function renderRec(){
     return;
   }
   const hi=(text)=>kw?text.replace(new RegExp(`(${kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'),'<mark style="background:#ffe066;border-radius:2px">$1</mark>'):text;
-  el.innerHTML=recs.map(r=>{
-    const isI=r.type==='income';
-    const mem=window.members.find(m=>m.id===r.person);
-    const cat=window.cats.find(c=>c.name===r.category);
-    const icon=isI?'💰':(cat?cat.icon:'📝');
-    return `<div class="rrow" onclick="openEditModal('${r.id}')" style="cursor:pointer">
-      <div style="font-size:18px;width:26px;text-align:center;flex-shrink:0">${icon}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hi(r.category)}${r.note?` · <span style="color:var(--text2)">${hi(r.note)}</span>`:''}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:3px">${mem?mem.avatar+' '+mem.name:r.person} · ${r.date} <span class="tag ${isI?'ti':'te'}">${isI?'收入':'支出'}</span></div>
-      </div>
-      <div style="font-size:15px;font-weight:500;flex-shrink:0;color:${isI?'var(--green)':'var(--red)'};margin-right:4px">${isI?'+':'-'}${fmt(r.amount)}</div>
-      <span style="color:var(--text3);font-size:13px">›</span>
+  // 依日期分組
+  const groups={};
+  recs.forEach(r=>{if(!groups[r.date])groups[r.date]=[];groups[r.date].push(r);});
+  const today=new Date(),todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const yest=new Date(today);yest.setDate(yest.getDate()-1);
+  const yesterdayStr=`${yest.getFullYear()}-${String(yest.getMonth()+1).padStart(2,'0')}-${String(yest.getDate()).padStart(2,'0')}`;
+  function dateLabel(d){
+    if(d===todayStr) return '今天';
+    if(d===yesterdayStr) return '昨天';
+    const p=d.split('-');return `${parseInt(p[1])}月${parseInt(p[2])}日`;
+  }
+  el.innerHTML=Object.keys(groups).sort((a,b)=>b.localeCompare(a)).map(date=>{
+    const dayRecs=groups[date];
+    const dayExp=dayRecs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+    const dayInc=dayRecs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+    const dayTotalTxt=dayInc>0&&dayExp>0?`+${fmt(dayInc)} / -${fmt(dayExp)}`
+      :dayInc>0?`+${fmt(dayInc)}`:`-${fmt(dayExp)}`;
+    const rows=dayRecs.map(r=>{
+      const isI=r.type==='income';
+      const mem=window.members.find(m=>m.id===r.person);
+      const cat=window.cats.find(c=>c.name===r.category);
+      const icon=isI?'💰':(cat?cat.icon:'📝');
+      return `<div class="rrow-wrap" id="rw_${r.id}">
+        <div class="rrow-del-bg" onclick="delRecord('${r.id}')"><span>刪除</span></div>
+        <div class="rrow" onclick="openEditModal('${r.id}')" style="cursor:pointer"
+          ontouchstart="swipeStart(event,'${r.id}')"
+          ontouchmove="swipeMove(event,'${r.id}')"
+          ontouchend="swipeEnd(event,'${r.id}')">
+          <div style="font-size:18px;width:26px;text-align:center;flex-shrink:0">${icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hi(r.category)}${r.note?` · <span style="color:var(--text2)">${hi(r.note)}</span>`:''}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">${mem?mem.avatar+' '+mem.name:r.person} <span class="tag ${isI?'ti':'te'}">${isI?'收入':'支出'}</span></div>
+          </div>
+          <div style="font-size:15px;font-weight:500;flex-shrink:0;color:${isI?'var(--green)':'var(--red)'};margin-right:4px">${isI?'+':'-'}${fmt(r.amount)}</div>
+          <span style="color:var(--text3);font-size:13px">›</span>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="date-group">
+      <div class="date-group-label"><span>${dateLabel(date)}</span><span class="date-group-total">${dayTotalTxt}</span></div>
+      ${rows}
     </div>`;
   }).join('');
 }
@@ -1590,7 +1699,32 @@ window.saveAsQuick=function saveAsQuick(){
 
 
 /* ══ 1. 金額快速加 ══ */
-function addAmt(v){
+function previewCalc(){
+  const el=document.getElementById('aAmt');
+  const preview=document.getElementById('calcPreview');
+  if(!el||!preview) return;
+  const val=el.value.trim();
+  // 只有包含運算符才顯示預覽
+  if(!/[+\-*/]/.test(val)){preview.style.display='none';return;}
+  try{
+    // 安全計算：只允許數字和運算符
+    if(!/^[\d+\-*/.() ]+$/.test(val)){preview.style.display='none';return;}
+    const result=Math.round(Function('"use strict";return ('+val+')')());
+    if(isNaN(result)||!isFinite(result)){preview.style.display='none';return;}
+    preview.style.display='block';
+    preview.textContent=`= NT$${result.toLocaleString()}`;
+  }catch(e){preview.style.display='none';}
+}
+function evalAmt(val){
+  if(!val) return 0;
+  if(!/[+\-*/]/.test(val)) return parseFloat(val)||0;
+  try{
+    if(!/^[\d+\-*/.() ]+$/.test(val)) return parseFloat(val)||0;
+    const result=Math.round(Function('"use strict";return ('+val+')')());
+    return isNaN(result)||!isFinite(result)?parseFloat(val)||0:result;
+  }catch(e){return parseFloat(val)||0;}
+}
+window.previewCalc=previewCalc;
   const el=document.getElementById('aAmt');
   const cur=parseFloat(el.value)||0;
   el.value=cur+v;
