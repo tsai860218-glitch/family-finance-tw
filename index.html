@@ -41,22 +41,39 @@
   window.members=[]; window.cats=[]; window.records=[];
   window.monthBudgets={}; window.quickItems={}; window.surplusPool={};
   window.fbReady=false;
+  window._loaded={members:false,cats:false,records:false};
+
+  function tryFirstRender(){
+    if(window.fbReady) return;
+    if(!window._loaded.members||!window._loaded.cats||!window._loaded.records) return;
+    window.fbReady=true;
+    document.getElementById("lo").style.display="none";
+    window.updateMonthLabel();
+    // 恢復上次頁籤
+    try{
+      const lastTab=localStorage.getItem('lastTab');
+      if(lastTab&&lastTab!=='add'&&['ov','yr','bud','rec','mem','pool'].includes(lastTab)){
+        goTab(lastTab); return;
+      }
+    }catch(e){}
+    try{window.renderSummaryCard();}catch(e){console.warn('summary',e);}
+    try{window.renderOverview();}catch(e){console.warn('overview',e);}
+    try{checkAutoRecs();}catch(e){}
+  }
 
   onValue(ref(db,"members"), snap=>{
     window.members = snap.val() ? Object.values(snap.val()) : DEF_MEMBERS;
     if(!snap.val()) set(ref(db,"members"), Object.fromEntries(DEF_MEMBERS.map(m=>[m.id,m])));
+    window._loaded.members=true;
     if(window.fbReady) window.updateAll();
-    else if(window.records.length) { // records already in, re-trigger
-      try{window.renderSummaryCard();window.renderOverview();}catch(e){}
-    }
+    else tryFirstRender();
   });
   onValue(ref(db,"cats"), snap=>{
     window.cats = snap.val() ? Object.values(snap.val()) : DEF_CATS;
     if(!snap.val()) set(ref(db,"cats"), Object.fromEntries(DEF_CATS.map(c=>[c.id,c])));
+    window._loaded.cats=true;
     if(window.fbReady) window.updateAll();
-    else if(window.records.length) {
-      try{window.renderSummaryCard();window.renderOverview();}catch(e){}
-    }
+    else tryFirstRender();
   });
   onValue(ref(db,"monthBudgets"), snap=>{
     window.monthBudgets = snap.val() || {};
@@ -74,14 +91,9 @@
   });
   onValue(ref(db,"records"), snap=>{
     window.records = snap.val() ? Object.values(snap.val()) : [];
-    if(!window.fbReady){
-      window.fbReady=true;
-      document.getElementById("lo").style.display="none";
-      window.updateMonthLabel();
-      try { window.renderSummaryCard(); } catch(e){ console.warn('summary',e); }
-      try { window.renderOverview(); } catch(e){ console.warn('overview',e); }
-      try { checkAutoRecs(); } catch(e){}
-    } else { window.updateAll(); }
+    window._loaded.records=true;
+    if(window.fbReady) window.updateAll();
+    else tryFirstRender();
   });
 
   window.fbSaveMembers     = ()=> set(ref(db,"members"),      Object.fromEntries(window.members.map(m=>[m.id,m])));
@@ -688,6 +700,7 @@ function chMonth(d){
 
 function goTab(t){
   activeTab=t; window.activeTab=t;
+  window.updateMonthLabel();
   try{ localStorage.setItem('lastTab', t); }catch(e){}
   ['ov','yr','bud','add','rec','mem','pool'].forEach(x=>{
     const el=document.getElementById('t'+x);if(el)el.style.display=t===x?'block':'none';
@@ -2322,13 +2335,6 @@ window.updateAll=function(){
 window.addEventListener('online',()=>document.getElementById('sd').classList.remove('off'));
 window.addEventListener('offline',()=>document.getElementById('sd').classList.add('off'));
 window.updateMonthLabel();
-// 恢復上次停留的頁籤（記帳頁除外，重開不應停在那）
-try{
-  const lastTab=localStorage.getItem('lastTab');
-  if(lastTab&&lastTab!=='add'&&['ov','yr','bud','rec','mem','pool'].includes(lastTab)){
-    goTab(lastTab);
-  }
-}catch(e){}
 </script>
 </body>
 </html>
