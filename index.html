@@ -565,6 +565,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
     </div>
     <div class="fr" style="margin-bottom:8px">
       <div class="fg"><label>日期</label><input type="date" id="aDate"></div>
+      <div class="fg"><label>時間</label><input type="time" id="aTime" style="font-size:13px;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit"></div>
     </div>
     <div class="fr" style="grid-template-columns:1fr">
       <div class="fg"><label>備註（選填）</label><input type="text" id="aNote" placeholder="說明..." oninput="showNoteSugs()" onfocus="showNoteSugs()"><div class="note-sugs" id="noteSugs"></div></div>
@@ -1197,6 +1198,9 @@ function renderAddForm(){
   const isCurMonth=curMonth.getFullYear()===now.getFullYear()&&curMonth.getMonth()===now.getMonth();
   const d=isCurMonth?now:new Date(curMonth.getFullYear(),curMonth.getMonth(),1);
   document.getElementById('aDate').value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  // 時間：當月用現在時間，其他月用 00:00
+  const nt=isCurMonth?now:new Date(0);
+  document.getElementById('aTime').value=`${String(nt.getHours()).padStart(2,'0')}:${String(nt.getMinutes()).padStart(2,'0')}`;
   renderQuickGrid();
   refreshCatSel();
 }
@@ -1206,11 +1210,12 @@ function addRecord(){
   const amount=evalAmt(document.getElementById('aAmt').value);
   const category=document.getElementById('aCat').value;
   const date=document.getElementById('aDate').value;
+  const time=document.getElementById('aTime')?.value||'';
   const noteRaw=document.getElementById('aNote').value.trim();
   const install=(document.getElementById('aInstall')?.value||'').trim();
   const note=install?`${noteRaw?noteRaw+' ':''}[分期 ${install}]`:noteRaw;
   if(!amount){alert('請輸入金額');return;}
-  window.fbAddRecord({type,person,category,amount,note,date});
+  window.fbAddRecord({type,person,category,amount,note,date,time});
   if(type==='expense') saveLastRecord(person);
   const saveQuick=document.getElementById('aSaveQuick')?.checked;
   if(saveQuick&&noteRaw){
@@ -1283,7 +1288,7 @@ function renderRec(){
           <div style="font-size:18px;width:26px;text-align:center;flex-shrink:0">${icon}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hi(r.category)}${r.note?` · <span style="color:var(--text2)">${hi(r.note)}</span>`:''}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:3px">${mem?mem.avatar+' '+mem.name:r.person} <span class="tag ${isI?'ti':'te'}">${isI?'收入':'支出'}</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">${mem?mem.avatar+' '+mem.name:r.person} <span class="tag ${isI?'ti':'te'}">${isI?'收入':'支出'}</span>${r.time?` <span style="color:var(--text3)">${r.time}</span>`:''}</div>
           </div>
           <div style="font-size:15px;font-weight:500;flex-shrink:0;color:${isI?'var(--green)':'var(--red)'};margin-right:4px">${isI?'+':'-'}${fmt(r.amount)}</div>
           <span style="color:var(--text3);font-size:13px">›</span>
@@ -1331,6 +1336,7 @@ function openEditModal(id){
         <div class="fr" style="margin-bottom:10px">
           <div class="fg"><label>分類</label><select id="e_cat">${isI?incCatOpts:expOptGroup}</select></div>
           <div class="fg"><label>日期</label><input type="date" id="e_date" value="${r.date}"></div>
+          <div class="fg"><label>時間</label><input type="time" id="e_time" value="${r.time||''}" style="font-size:13px;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit"></div>
         </div>
         <div class="fg" style="margin-bottom:14px">
           <label>備註</label>
@@ -1363,9 +1369,10 @@ function saveEditRecord(id){
   const amount=parseFloat(document.getElementById('e_amt').value)||0;
   const category=document.getElementById('e_cat').value;
   const date=document.getElementById('e_date').value;
+  const time=document.getElementById('e_time')?.value||'';
   const note=document.getElementById('e_note').value.trim();
   if(!amount){alert('請輸入金額');return;}
-  const updated={...r, type, person, amount, category, date, note};
+  const updated={...r, type, person, amount, category, date, time, note};
   window.fbUpdateRecord(id, updated);
   closeModal(null,true);
   showToast('已更新！');
@@ -1782,8 +1789,8 @@ function getFilteredRecs(){
   if(kw) recs=recs.filter(r=>(r.category+' '+(r.note||'')).toLowerCase().includes(kw));
   // 排序
   const sort=document.getElementById('fSort')?.value||'date_desc';
-  if     (sort==='date_desc')   recs=recs.slice().sort((a,b)=>b.date.localeCompare(a.date));
-  else if(sort==='date_asc')    recs=recs.slice().sort((a,b)=>a.date.localeCompare(b.date));
+  if     (sort==='date_desc')   recs=recs.slice().sort((a,b)=>b.date!==a.date?b.date.localeCompare(a.date):(b.time||'').localeCompare(a.time||''));
+  else if(sort==='date_asc')    recs=recs.slice().sort((a,b)=>a.date!==b.date?a.date.localeCompare(b.date):(a.time||'').localeCompare(b.time||''));
   else if(sort==='amount_desc') recs=recs.slice().sort((a,b)=>b.amount-a.amount);
   else if(sort==='amount_asc')  recs=recs.slice().sort((a,b)=>a.amount-b.amount);
   else if(sort==='cat_asc')     recs=recs.slice().sort((a,b)=>a.category.localeCompare(b.category,'zh-Hant'));
@@ -1806,10 +1813,10 @@ function checkNewMonthBudget(){
 function exportExcel(){
   const recs=getFilteredRecs();
   if(!recs.length){showToast('沒有資料可匯出');return;}
-  const rows=[['日期','類型','成員','分類','金額','備註']];
+  const rows=[['日期','時間','類型','成員','分類','金額','備註']];
   recs.forEach(r=>{
     const mem=window.members.find(m=>m.id===r.person);
-    rows.push([r.date, r.type==='income'?'收入':'支出', mem?mem.name:r.person, r.category, r.amount, r.note||'']);
+    rows.push([r.date, r.time||'', r.type==='income'?'收入':'支出', mem?mem.name:r.person, r.category, r.amount, r.note||'']);
   });
   // 使用 SheetJS
   const script=document.createElement('script');
