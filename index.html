@@ -1148,7 +1148,7 @@ function renderBudget(){
               <span style="font-size:11px;color:var(--text2)">NT$</span>
               <input class="bi" type="number" value="${val}" min="0" id="bi_${c.id}"
                 onchange="${isFamily?'updateFamilyBudget':'updateBudget'}('${c.id}',this.value)"
-                oninput="${isFamily?'':'checkBI(''+c.id+'',this.value)'}">
+                ${isFamily?'':'oninput="checkBI(\''+c.id+'\',this.value)"'}>
               ${isFamily&&val>0?`<span style="font-size:11px;color:var(--text3)">已用 ${fmt(totalSpent||0)}</span>`:''}
               ${!isFamily&&inc>0&&val>0?`<span style="font-size:11px;color:var(--text3)">${ratio}%</span>`:''}
               ${val===0?`<span style="font-size:11px;color:var(--text3)">${isFamily?'未設家庭預算':'本月不負責'}</span>`:''}
