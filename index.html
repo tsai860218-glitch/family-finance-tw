@@ -564,7 +564,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
       </div>
     </div>
     <div class="fr" style="margin-bottom:8px">
-      <div class="fg"><label id="aCatLbl">分類</label><select id="aCat"></select></div>
+      <div class="fg"><label id="aCatLbl">分類</label><select id="aCat" onchange="autoFillFamilyShare()"></select></div>
     </div>
     <div class="fr" style="margin-bottom:8px">
       <div class="fg"><label>日期</label><input type="date" id="aDate"></div>
@@ -1150,7 +1150,11 @@ function renderBudget(){
       const totalSpent=isFamily
         ?getMonthRecs('all').filter(r=>r.type==='expense'&&r.category===c.name).reduce((s,r)=>s+r.amount,0)
         :null;
+      const memberCount=Math.max(window.members.length,1);
+      const perPersonAmt=isFamily&&val>0?Math.round(val/memberCount):0;
       const ratio=inc>0&&val>0?Math.round(val/inc*100):0;
+      const famPct=isFamily&&val>0?Math.min((totalSpent||0)/val*100,100):0;
+      const famColor=famPct>=100?'var(--red)':famPct>80?'var(--amber)':'var(--purple)';
       return `<div class="card" style="${val===0?'opacity:0.55':''}">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:20px;width:26px;text-align:center;flex-shrink:0">${c.icon}</span>
@@ -1164,11 +1168,23 @@ function renderBudget(){
               <input class="bi" type="number" value="${val}" min="0" id="bi_${c.id}"
                 onchange="${isFamily?'updateFamilyBudget':'updateBudget'}('${c.id}',this.value)"
                 ${isFamily?'':'oninput="checkBI(\''+c.id+'\',this.value)"'}>
-              ${isFamily&&val>0?`<span style="font-size:11px;color:var(--text3)">已用 ${fmt(totalSpent||0)}</span>`:''}
-              ${!isFamily&&inc>0&&val>0?`<span style="font-size:11px;color:var(--text3)">${ratio}%</span>`:''}
               ${val===0?`<span style="font-size:11px;color:var(--text3)">${isFamily?'未設家庭預算':'本月不負責'}</span>`:''}
             </div>
-            ${isFamily?'<div class="family-bud-hint">🏠 全家共用此預算，不分成員</div>':''}
+            ${isFamily&&val>0?`
+            <div style="margin-top:8px;padding:8px 10px;background:var(--surface2);border-radius:var(--radius-sm)">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+                <span style="font-size:11px;color:var(--text2)">每人分攤 <strong style="color:var(--purple)">${fmt(perPersonAmt)}</strong> × ${memberCount}人</span>
+                <span style="font-size:11px;color:${famColor}">已付 ${fmt(totalSpent||0)} / ${fmt(val)}</span>
+              </div>
+              <div class="pw"><div class="pb" style="width:${famPct}%;background:${famColor}"></div></div>
+              ${(totalSpent||0)>0?`<div style="margin-top:5px;font-size:10px;color:var(--text3)">
+                ${window.members.map(m=>{
+                  const mSpent=getMonthRecs('all').filter(r=>r.type==='expense'&&r.category===c.name&&r.person===m.id).reduce((s,r)=>s+r.amount,0);
+                  return mSpent>0?`${m.avatar} ${m.name} 已付 ${fmt(mSpent)}`:'';
+                }).filter(Boolean).join('　')}
+              </div>`:''}
+            </div>`:''}
+            ${!isFamily&&inc>0&&val>0?`<div style="font-size:11px;color:var(--text3);margin-top:3px">${ratio}% 收入</div>`:''}
           </div>
         </div>
       </div>`;
@@ -1231,6 +1247,24 @@ function updateBudget(cid,val){
 }
 
 /* ── 記帳 ── */
+function autoFillFamilyShare(){
+  const catName=document.getElementById('aCat')?.value;
+  const type=document.getElementById('aType')?.value;
+  if(type!=='expense'||!catName) return;
+  const cat=window.cats.find(c=>c.name===catName);
+  if(!cat||getCatMode(cat)!=='family') return;
+  const ym=ymKey(curMonth);
+  const total=getFamilyBudget(ym,cat.id);
+  if(!total) return;
+  const share=Math.round(total/Math.max(window.members.length,1));
+  const amtEl=document.getElementById('aAmt');
+  // 只有金額是空的時候才自動帶入（不覆蓋已輸入的金額）
+  if(amtEl&&(!amtEl.value||amtEl.value==='0')) {
+    amtEl.value=share;
+    showToast(`已帶入每人分攤金額 ${fmt(share)}`);
+  }
+}
+window.autoFillFamilyShare=autoFillFamilyShare;
 function refreshCatSel(){
   const type=document.getElementById('aType').value;
   // 更新成員選單（收入時不顯示「家庭支出」）
