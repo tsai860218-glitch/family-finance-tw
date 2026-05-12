@@ -306,6 +306,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
 .type-badge{font-size:11px;padding:3px 9px;border-radius:var(--radius-pill);font-weight:500;flex-shrink:0;cursor:pointer;user-select:none;transition:all .15s}
 .type-badge.fixed{background:var(--blue-bg);color:var(--blue-text)}
 .type-badge.variable{background:var(--green-bg);color:var(--green-text)}
+.type-badge.family{background:var(--purple);color:#fff}
+.type-badge.personal{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.family-bud-hint{font-size:11px;color:var(--purple);margin-top:3px;padding:3px 8px;background:#f0eeff;border-radius:var(--radius-sm)}
 .sort-confirm-bar{background:var(--text);color:#fff;border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}
 .bud-section{margin-bottom:1.5rem}
 
@@ -627,7 +630,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang TC','Micr
   <hr class="divider">
   <div id="cat_sort_bar"></div>
   <div class="sh">支出分類管理</div>
-  <div class="tip">拖曳 ☰ 調整順序，點標籤切換固定／不固定，💡 切換是否顯示天數提示，完成後點「確定」儲存。</div>
+  <div class="tip">拖曳 ☰ 調整順序，點標籤切換固定／不固定，點「🏠家庭/👤個人」切換預算模式，💡 切換天數提示，完成後點「確定」儲存。</div>
   <div id="cat_list"></div>
   <div style="display:flex;gap:8px;margin-top:8px">
     <button class="btn" onclick="addCat('fixed')">＋ 固定支出</button>
@@ -668,8 +671,26 @@ function getBudget(ym,cid,mid){
   const mb=window.monthBudgets[ym];
   return mb&&mb[cid]&&mb[cid][mid]!=null?mb[cid][mid]:0;
 }
+function getFamilyBudget(ym,cid){
+  // 家庭模式：取所有成員預算加總（或直接用 family 欄位）
+  const mb=window.monthBudgets[ym];
+  if(!mb||!mb[cid]) return 0;
+  // 支援舊格式（各成員加總）和新格式（family key）
+  if(mb[cid]['family']!=null) return mb[cid]['family'];
+  return window.members.reduce((s,m)=>s+(mb[cid][m.id]||0),0);
+}
+function saveFamilyBudget(ym,cid,val){
+  if(!window.monthBudgets[ym]) ensureMonthBudget(ym);
+  if(!window.monthBudgets[ym][cid]) window.monthBudgets[ym][cid]={};
+  window.monthBudgets[ym][cid]['family']=val;
+  window.fbSaveMonthBudget(ym,window.monthBudgets[ym]);
+}
+function getCatMode(c){return c.budMode==='family'?'family':'personal';}
 function getMemberMonthBudget(ym,mid){
-  return window.cats.reduce((s,c)=>s+getBudget(ym,c.id,mid),0);
+  return window.cats.reduce((s,c)=>{
+    if(getCatMode(c)==='family') return s; // 家庭模式不計入個人預算
+    return s+getBudget(ym,c.id,mid);
+  },0);
 }
 function ensureMonthBudget(ym){
   if(window.monthBudgets[ym]) return window.monthBudgets[ym];
@@ -824,7 +845,11 @@ window.renderOverview=function(){
         const active=groupCats.filter(c=>getBudget(ym,c.id,m.id)>0||catSpent[c.name]);
         if(!active.length) return '';
         const cards=active.map(c=>{
-          const spent=catSpent[c.name]||0, bgt=getBudget(ym,c.id,m.id);
+          const isFamily=getCatMode(c)==='family';
+          const spent=isFamily
+            ? getMonthRecs('all').filter(r=>r.type==='expense'&&r.category===c.name).reduce((s,r)=>s+r.amount,0)
+            : (catSpent[c.name]||0);
+          const bgt=isFamily?getFamilyBudget(ym,c.id):getBudget(ym,c.id,m.id);
           const pct=bgt>0?Math.min(spent/bgt*100,100):0;
           const over=bgt>0&&spent>bgt;
           const atLimit=bgt>0&&spent===bgt;
@@ -1105,21 +1130,30 @@ function renderBudget(){
   const renderBudGroup=(groupCats,label,badgeCls)=>{
     if(!groupCats.length) return '';
     const rows=groupCats.map(c=>{
-      const val=getBudget(ym,c.id,budMember);
+      const isFamily=getCatMode(c)==='family';
+      const val=isFamily?getFamilyBudget(ym,c.id):getBudget(ym,c.id,budMember);
+      const totalSpent=isFamily
+        ?getMonthRecs('all').filter(r=>r.type==='expense'&&r.category===c.name).reduce((s,r)=>s+r.amount,0)
+        :null;
       const ratio=inc>0&&val>0?Math.round(val/inc*100):0;
       return `<div class="card" style="${val===0?'opacity:0.55':''}">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:20px;width:26px;text-align:center;flex-shrink:0">${c.icon}</span>
           <div style="flex:1;min-width:0">
-            <div style="font-size:14px;color:var(--text);margin-bottom:6px">${c.name}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <span style="font-size:14px;color:var(--text)">${c.name}</span>
+              ${isFamily?'<span style="font-size:10px;padding:1px 7px;border-radius:99px;background:var(--purple);color:#fff">家庭共用</span>':''}
+            </div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <span style="font-size:11px;color:var(--text2)">NT$</span>
               <input class="bi" type="number" value="${val}" min="0" id="bi_${c.id}"
-                onchange="updateBudget('${c.id}',this.value)"
-                oninput="checkBI('${c.id}',this.value)">
-              ${inc>0&&val>0?`<span style="font-size:11px;color:var(--text3)">${ratio}%</span>`:''}
-              ${val===0?`<span style="font-size:11px;color:var(--text3)">本月不負責</span>`:''}
+                onchange="${isFamily?'updateFamilyBudget':'updateBudget'}('${c.id}',this.value)"
+                oninput="${isFamily?'':'checkBI(''+c.id+'',this.value)'}">
+              ${isFamily&&val>0?`<span style="font-size:11px;color:var(--text3)">已用 ${fmt(totalSpent||0)}</span>`:''}
+              ${!isFamily&&inc>0&&val>0?`<span style="font-size:11px;color:var(--text3)">${ratio}%</span>`:''}
+              ${val===0?`<span style="font-size:11px;color:var(--text3)">${isFamily?'未設家庭預算':'本月不負責'}</span>`:''}
             </div>
+            ${isFamily?'<div class="family-bud-hint">🏠 全家共用此預算，不分成員</div>':''}
           </div>
         </div>
       </div>`;
@@ -1155,6 +1189,14 @@ function checkBI(cid,val){
     <div class="btrack"><div class="bfill" style="width:${Math.min(total/inc*100,100)}%;background:${fc}"></div></div>
   </div>`;
 }
+function updateFamilyBudget(cid,val){
+  const ym=ymKey(curMonth);
+  const newVal=parseFloat(val)||0;
+  saveFamilyBudget(ym,cid,newVal);
+  showToast('家庭預算已更新');
+}
+window.updateFamilyBudget=updateFamilyBudget;
+
 function updateBudget(cid,val){
   const ym=ymKey(curMonth),inc=mIncome(budMember);
   const newVal=parseFloat(val)||0;
@@ -1424,6 +1466,7 @@ function renderMembers(){
       <span style="font-size:20px;cursor:pointer" onclick="toggleCIP('${c.id}')">${c.icon}</span>
       <input class="cni" value="${c.name}" onchange="updateCatNameDraft('${c.id}',this.value)">
       <span class="type-badge ${c.type==='fixed'?'fixed':'variable'}" onclick="toggleCatType('${c.id}')">${c.type==='fixed'?'固定':'不固定'}</span>
+      <span class="type-badge ${c.budMode==='family'?'family':'personal'}" onclick="toggleCatBudMode('${c.id}')" title="點擊切換預算模式">${c.budMode==='family'?'🏠家庭':'👤個人'}</span>
       <span title="${c.showHint===false?'不顯示天數提示':'顯示天數提示'}" style="font-size:16px;cursor:pointer;opacity:${c.showHint===false?0.3:1}" onclick="toggleCatHint('${c.id}')">💡</span>
       <button class="btn del sm" onclick="deleteCatDraft('${c.id}')">刪除</button>
     </div>
@@ -1463,6 +1506,12 @@ function toggleCatHint(id){
   initDraft();
   const c=catDraft.find(x=>x.id===id);if(!c)return;
   c.showHint = c.showHint===false ? true : false;
+  renderMembers();
+}
+function toggleCatBudMode(id){
+  initDraft();
+  const c=catDraft.find(x=>x.id===id);if(!c)return;
+  c.budMode = c.budMode==='family' ? 'personal' : 'family';
   renderMembers();
 }
 function updateCatNameDraft(id,val){
@@ -1565,6 +1614,7 @@ window.addMember=addMember;
 window.initDraft=initDraft;
 window.toggleCatType=toggleCatType;
 window.toggleCatHint=toggleCatHint;
+window.toggleCatBudMode=toggleCatBudMode;
 window.updateCatNameDraft=updateCatNameDraft;
 window.setCatIconDraft=setCatIconDraft;
 window.deleteCatDraft=deleteCatDraft;
