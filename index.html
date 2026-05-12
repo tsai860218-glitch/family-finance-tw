@@ -687,9 +687,21 @@ function saveFamilyBudget(ym,cid,val){
 }
 function getCatMode(c){return c.budMode==='family'?'family':'personal';}
 function getMemberMonthBudget(ym,mid){
+  const memberCount=Math.max(window.members.length,1);
   return window.cats.reduce((s,c)=>{
-    if(getCatMode(c)==='family') return s; // 家庭模式不計入個人預算
+    if(getCatMode(c)==='family'){
+      // 家庭預算平均分攤到每個人
+      return s+Math.round(getFamilyBudget(ym,c.id)/memberCount);
+    }
     return s+getBudget(ym,c.id,mid);
+  },0);
+}
+function getMemberFamilyShare(ym,mid){
+  // 只算家庭預算分攤部分
+  const memberCount=Math.max(window.members.length,1);
+  return window.cats.reduce((s,c)=>{
+    if(getCatMode(c)==='family') return s+Math.round(getFamilyBudget(ym,c.id)/memberCount);
+    return s;
   },0);
 }
 function ensureMonthBudget(ym){
@@ -837,6 +849,7 @@ window.renderOverview=function(){
       const inc=recs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
       const exp=recs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
       const bud=getMemberMonthBudget(ym,m.id), sur=inc-exp;
+      const familyShareAmt=getMemberFamilyShare(ym,m.id);
       const color=MCOLS[mi%MCOLS.length];
       const catSpent={};
       recs.filter(r=>r.type==='expense').forEach(r=>{catSpent[r.category]=(catSpent[r.category]||0)+r.amount;});
@@ -894,7 +907,7 @@ window.renderOverview=function(){
         </div>
         ${bud>0?`<div style="margin-bottom:14px;padding:10px 12px;background:var(--surface2);border-radius:8px">
           <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-            <span style="font-size:11px;color:var(--text2)">預算使用 ${fmt(exp)} / ${fmt(bud)}</span>
+            <span style="font-size:11px;color:var(--text2)">預算 ${fmt(exp)} / ${fmt(bud)}${familyShareAmt>0?` <span style="color:var(--purple)">（含家庭分攤 ${fmt(familyShareAmt)}）</span>`:''}</span>
             <span style="font-size:11px;font-weight:500;color:${budColor}">${Math.round(exp/(bud||1)*100)}%</span>
           </div>
           <div class="pw"><div class="pb" style="width:${budPct}%;background:${budColor}"></div></div>
@@ -1107,6 +1120,8 @@ function renderBudget(){
   const ym=ymKey(curMonth);
   ensureMonthBudget(ym);
   const inc=mIncome(budMember), bud=getMemberMonthBudget(ym,budMember);
+  const familyShare=getMemberFamilyShare(ym,budMember);
+  const personalBud=bud-familyShare;
   const over=inc>0&&bud>inc, pct=inc>0?Math.min(bud/inc*100,100):0;
   const fc=over?'#D85A30':pct>85?'#BA7517':'#1D9E75';
   const mem=window.members.find(m=>m.id===budMember);
@@ -1117,8 +1132,8 @@ function renderBudget(){
   document.getElementById('bud_alert').innerHTML=inc===0
     ?`<div class="al alw"><span class="ali">⚠️</span><div>${mem?.avatar} ${mem?.name} 本月尚無收入，無法驗證預算。</div></div>`
     :over
-      ?`<div class="al alw"><span class="ali">⚠️</span><div>${mem?.avatar} ${mem?.name} 預算 <strong>${fmt(bud)}</strong> 超過收入 <strong>${fmt(inc)}</strong>，超出 <strong>${fmt(bud-inc)}</strong>。</div></div>`
-      :`<div class="al alo"><span class="ali">✅</span><div>${mem?.avatar} ${mem?.name} 預算 ${fmt(bud)}，收入 ${fmt(inc)}，剩餘可分配 ${fmt(inc-bud)}。</div></div>`;
+      ?`<div class="al alw"><span class="ali">⚠️</span><div>${mem?.avatar} ${mem?.name} 預算合計 <strong>${fmt(bud)}</strong> 超過收入 <strong>${fmt(inc)}</strong>，超出 <strong>${fmt(bud-inc)}</strong>。${familyShare>0?`（含家庭分攤 ${fmt(familyShare)}）`:''}</div></div>`
+      :`<div class="al alo"><span class="ali">✅</span><div>${mem?.avatar} ${mem?.name} 預算合計 ${fmt(bud)}${familyShare>0?`（個人 ${fmt(personalBud)} + 家庭分攤 ${fmt(familyShare)}）`:''}，收入 ${fmt(inc)}，剩餘可分配 ${fmt(inc-bud)}。</div></div>`;
 
   document.getElementById('bud_bar').innerHTML=`<div class="btbar">
     <div class="btr"><span class="btl">預算佔收入比（${curMonth.getFullYear()}年${curMonth.getMonth()+1}月）</span>
@@ -1463,12 +1478,16 @@ function renderMembers(){
       ondrop="dropOn(event,'${c.id}')"
       ondragend="dragEnd(event)">
       <span class="drag-handle">☰</span>
-      <span style="font-size:20px;cursor:pointer" onclick="toggleCIP('${c.id}')">${c.icon}</span>
-      <input class="cni" value="${c.name}" onchange="updateCatNameDraft('${c.id}',this.value)">
-      <span class="type-badge ${c.type==='fixed'?'fixed':'variable'}" onclick="toggleCatType('${c.id}')">${c.type==='fixed'?'固定':'不固定'}</span>
-      <span class="type-badge ${c.budMode==='family'?'family':'personal'}" onclick="toggleCatBudMode('${c.id}')" title="點擊切換預算模式">${c.budMode==='family'?'🏠家庭':'👤個人'}</span>
-      <span title="${c.showHint===false?'不顯示天數提示':'顯示天數提示'}" style="font-size:16px;cursor:pointer;opacity:${c.showHint===false?0.3:1}" onclick="toggleCatHint('${c.id}')">💡</span>
-      <button class="btn del sm" onclick="deleteCatDraft('${c.id}')">刪除</button>
+      <span style="font-size:20px;cursor:pointer;flex-shrink:0" onclick="toggleCIP('${c.id}')">${c.icon}</span>
+      <div style="flex:1;min-width:0">
+        <input class="cni" value="${c.name}" onchange="updateCatNameDraft('${c.id}',this.value)">
+        <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap;align-items:center">
+          <span class="type-badge ${c.type==='fixed'?'fixed':'variable'}" onclick="toggleCatType('${c.id}')">${c.type==='fixed'?'固定':'不固定'}</span>
+          <span class="type-badge ${c.budMode==='family'?'family':'personal'}" onclick="toggleCatBudMode('${c.id}')" title="點擊切換預算模式">${c.budMode==='family'?'🏠家庭':'👤個人'}</span>
+          <span title="${c.showHint===false?'不顯示天數提示':'顯示天數提示'}" style="font-size:14px;cursor:pointer;opacity:${c.showHint===false?0.3:1};margin-left:2px" onclick="toggleCatHint('${c.id}')">💡</span>
+        </div>
+      </div>
+      <button class="btn del sm" style="flex-shrink:0;align-self:center" onclick="deleteCatDraft('${c.id}')">刪除</button>
     </div>
     <div id="cip_${c.id}" style="display:none;padding:0 8px 8px">
       <div class="ipick"><div class="igrid">${CICONS.map(ic=>`<span class="io ${ic===c.icon?'sel':''}" onclick="setCatIconDraft('${c.id}','${ic}')">${ic}</span>`).join('')}</div></div>
