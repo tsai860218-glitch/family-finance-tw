@@ -722,7 +722,7 @@ function ensureMonthBudget(ym){
 }
 
 function getRecsYM(y,m){return window.records.filter(r=>{const d=new Date(r.date);return d.getFullYear()===y&&d.getMonth()===m;});}
-function getMonthRecs(pf){const y=curMonth.getFullYear(),m=curMonth.getMonth();return getRecsYM(y,m).filter(r=>!pf||pf==='all'||r.person===pf);}
+function getMonthRecs(pf){const y=curMonth.getFullYear(),m=curMonth.getMonth();return getRecsYM(y,m).filter(r=>!pf||pf==='all'||r.person===pf||(pf!=='family'&&r.person==='family'));}
 function mIncome(mid){return getMonthRecs(mid).filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);}
 
 window.updateMonthLabel=function(){document.getElementById('ml').textContent=`${curMonth.getFullYear()} 年 ${curMonth.getMonth()+1} 月`;};
@@ -1233,6 +1233,15 @@ function updateBudget(cid,val){
 /* ── 記帳 ── */
 function refreshCatSel(){
   const type=document.getElementById('aType').value;
+  // 更新成員選單（收入時不顯示「家庭支出」）
+  const pSel=document.getElementById('aPerson');
+  if(pSel){
+    const cur=pSel.value;
+    const familyOpt=type==='expense'?`<option value="family">🏠 家庭支出</option>`:'';
+    pSel.innerHTML=familyOpt+window.members.map(m=>`<option value="${m.id}">${m.avatar} ${m.name}</option>`).join('');
+    if(cur&&(cur==='family'||window.members.find(m=>m.id===cur))) pSel.value=cur;
+    else if(type==='income'&&cur==='family') pSel.value=window.members[0]?.id||'';
+  }
   document.getElementById('aCatLbl').textContent=type==='income'?'收入來源':'支出分類';
   if(type==='income'){
     document.getElementById('aCat').innerHTML=INCOME_CATS.map(c=>`<option value="${c}">${c}</option>`).join('');
@@ -1247,9 +1256,11 @@ function refreshCatSel(){
 function renderAddForm(){
   const last=getLastRecord();
   const pSel=document.getElementById('aPerson');
-  pSel.innerHTML=window.members.map(m=>`<option value="${m.id}">${m.avatar} ${m.name}</option>`).join('');
+  const aType=document.getElementById('aType')?.value||'expense';
+  const familyOpt=aType==='expense'?`<option value="family">🏠 家庭支出</option>`:'';
+  pSel.innerHTML=familyOpt+window.members.map(m=>`<option value="${m.id}">${m.avatar} ${m.name}</option>`).join('');
   // 記憶上次成員
-  if(last.person&&window.members.find(m=>m.id===last.person)) pSel.value=last.person;
+  if(last.person&&(last.person==='family'||window.members.find(m=>m.id===last.person))) pSel.value=last.person;
   // 日期跟月份
   const now=new Date();
   const isCurMonth=curMonth.getFullYear()===now.getFullYear()&&curMonth.getMonth()===now.getMonth();
@@ -1345,7 +1356,7 @@ function renderRec(){
           <div style="font-size:18px;width:26px;text-align:center;flex-shrink:0">${icon}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hi(r.category)}${r.note?` · <span style="color:var(--text2)">${hi(r.note)}</span>`:''}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:3px">${mem?mem.avatar+' '+mem.name:r.person} <span class="tag ${isI?'ti':'te'}">${isI?'收入':'支出'}</span>${r.time?` <span style="color:var(--text3)">${r.time}</span>`:''}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">${r.person==='family'?'🏠 家庭':(mem?mem.avatar+' '+mem.name:r.person)} <span class="tag ${isI?'ti':'te'}">${isI?'收入':'支出'}</span>${r.time?` <span style="color:var(--text3)">${r.time}</span>`:''}</div>
           </div>
           <div style="font-size:15px;font-weight:500;flex-shrink:0;color:${isI?'var(--green)':'var(--red)'};margin-right:4px">${isI?'+':'-'}${fmt(r.amount)}</div>
           <span style="color:var(--text3);font-size:13px">›</span>
@@ -1367,7 +1378,9 @@ function delRecord(id){
 function openEditModal(id){
   const r=window.records.find(x=>x.id===id); if(!r) return;
   const isI=r.type==='income';
-  const memOpts=window.members.map(m=>`<option value="${m.id}" ${m.id===r.person?'selected':''}>${m.avatar} ${m.name}</option>`).join('');
+  const isExpense=r.type==='expense';
+  const memOpts=(isExpense?`<option value="family" ${r.person==='family'?'selected':''}>🏠 家庭支出</option>`:'')+
+    window.members.map(m=>`<option value="${m.id}" ${m.id===r.person?'selected':''}>${m.avatar} ${m.name}</option>`).join('');
   const incCatOpts=INCOME_CATS.map(c=>`<option value="${c}" ${c===r.category?'selected':''}>${c}</option>`).join('');
   const expCatOpts=window.cats.map(c=>`<option value="${c.name}" ${c.name===r.category?'selected':''}>${c.icon} ${c.name}</option>`).join('');
   const fc=fixedCats(window.cats), vc=varCats(window.cats);
