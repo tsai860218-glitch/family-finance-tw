@@ -440,7 +440,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','PingFang TC'
 .rrow:active{background:var(--surface2)}
 .pb{transition:width .5s cubic-bezier(.4,0,.2,1)}
 
-/* ─ 반응형 ─ */
+/* ─ 分類大卡片格子 ─ */
+.cat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:4px}
+.cat-big-card{background:var(--surface2);border-radius:var(--radius-sm);padding:10px 10px 8px;border:0.5px solid var(--border)}
+.cat-big-card.over{background:var(--red-bg);border-color:#f0b0a0}
+.cat-big-icon{font-size:20px;display:block;margin-bottom:4px;line-height:1}
+.cat-big-name{font-size:12px;color:var(--text);font-weight:500;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-big-amt{font-size:15px;font-weight:700;color:var(--text);letter-spacing:-.3px;margin-bottom:5px}
+.cat-big-bar{height:4px;background:rgba(0,0,0,.07);border-radius:99px;overflow:hidden;margin-bottom:4px}
+.cat-big-fill{height:4px;border-radius:99px;transition:width .4s ease}
+.cat-big-remain{font-size:10px;color:var(--text3)}
+
+/* ─ 日期分組 ─ */
+.date-group-header{display:flex;justify-content:space-between;align-items:baseline;padding:10px 2px 6px;margin-top:4px}
+.date-group-label{font-size:12px;font-weight:700;color:var(--text2)}
+.date-group-sum{font-size:11px;color:var(--text3)}
+
 @media(max-width:500px){.fr.t3{grid-template-columns:1fr 1fr}}
 
 /* ─ 요약카드 ─ */
