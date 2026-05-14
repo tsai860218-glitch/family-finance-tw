@@ -753,7 +753,6 @@ function goTab(t){
 /* ══ 月份摘要卡 ══ */
 function renderSummaryCard(){
   if(!window.members.length) return;
-  const ym=ymKey(curMonth);
   const allRecs=getMonthRecs('all');
   const inc=allRecs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
   const exp=allRecs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
@@ -763,64 +762,41 @@ function renderSummaryCard(){
   const prevSur=prevRecs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0)
                -prevRecs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
   const diff=sur-prevSur;
-  const catSpent={};
-  allRecs.filter(r=>r.type==='expense').forEach(r=>{catSpent[r.category]=(catSpent[r.category]||0)+r.amount;});
-  const overCats=window.cats.filter(c=>{
-    const bgt=window.members.reduce((s,m)=>s+getBudget(ym,c.id,m.id),0);
-    return bgt>0&&(catSpent[c.name]||0)>bgt;
-  });
+  const spentPct=inc>0?Math.min(exp/inc*100,100):0;
+  const surColor=sur>=0?'rgba(255,255,255,.95)':'rgba(255,220,200,.95)';
   const el=document.getElementById('ov_summary');
   if(!el) return;
+  // 圓環
+  const R=28, CX=36, CY=36, CIRC=2*Math.PI*R;
+  const expDash=spentPct/100*CIRC;
+  const ringPath=inc>0?`
+    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="8"/>
+    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="8"
+      stroke-dasharray="${Math.max(expDash-2,0)} ${CIRC-Math.max(expDash-2,0)}"
+      stroke-dashoffset="${CIRC*0.25}" stroke-linecap="round"/>
+    <text x="${CX}" y="${CY+4}" text-anchor="middle" font-size="10" font-weight="700" fill="white">${Math.round(spentPct)}%</text>
+  `:`<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="8"/>
+    <text x="${CX}" y="${CY+4}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,.6)">無收入</text>`;
 
-  // 圓環圖 SVG
-  const R=38, CX=44, CY=44, CIRC=2*Math.PI*R;
-  const expPct = inc>0 ? Math.min(exp/inc,1) : 0;
-  const surPct = inc>0 ? Math.max((inc-exp)/inc,0) : 0;
-  const expDash = expPct*CIRC;
-  const surDash = surPct*CIRC;
-  const GAP=2;
-  const surColor=sur>=0?'var(--green)':'var(--red)';
-  const surLabel=sur>=0?`+${fmt(sur)}`:fmt(sur);
-  const ringHTML=`<svg width="88" height="88" viewBox="0 0 88 88" style="flex-shrink:0">
-    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="var(--surface2)" stroke-width="10"/>
-    ${inc>0?`
-    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="var(--red)" stroke-width="10"
-      stroke-dasharray="${expDash-GAP} ${CIRC-(expDash-GAP)}"
-      stroke-dashoffset="${CIRC*0.25}" stroke-linecap="round" transform="rotate(0 ${CX} ${CY})"/>
-    <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="var(--green)" stroke-width="10"
-      stroke-dasharray="${Math.max(surDash-GAP,0)} ${CIRC-Math.max(surDash-GAP,0)}"
-      stroke-dashoffset="${CIRC*0.25-expDash}" stroke-linecap="round"/>
-    `:''}
-    <text x="${CX}" y="${CY-5}" text-anchor="middle" font-size="9" fill="var(--text3)">${curMonth.getMonth()+1}月</text>
-    <text x="${CX}" y="${CY+7}" text-anchor="middle" font-size="10" font-weight="500" fill="${surColor}">${sur>=0?'盈':'虧'}</text>
-  </svg>`;
-
-  const diffHTML=prevSur!==0
-    ?`<div class="ring-vs">與上月 ${diff>=0?'↑':'↓'} ${fmt(Math.abs(diff))}</div>`:'' ;
-  const overHTML=overCats.length
-    ?`<div style="margin-top:6px">${overCats.map(c=>`<span class="ovr-badge">${c.icon} ${c.name}</span>`).join('')}</div>`:'';
-
-  el.innerHTML=`<div class="ring-summary">
-    ${ringHTML}
-    <div class="ring-info">
-      <div style="font-size:11px;color:var(--text3)">${curMonth.getFullYear()}年${curMonth.getMonth()+1}月 盈餘</div>
-      <div class="ring-surplus animate-count" style="color:${surColor}">${surLabel}</div>
-      <div class="ring-row">
-        <span>↑ ${fmt(inc)}</span>
-        <span>↓ ${fmt(exp)}</span>
+  el.innerHTML=`<div style="background:linear-gradient(135deg,#ffb347 0%,#f5a623 45%,#ff8c69 100%);border-radius:var(--radius);padding:16px 16px 14px;margin-bottom:10px;box-shadow:0 6px 20px rgba(245,166,35,.3)">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;color:rgba(255,255,255,.75);margin-bottom:4px;font-weight:500">本月盈餘</div>
+        <div style="font-size:28px;font-weight:700;color:${surColor};letter-spacing:-.5px;line-height:1">${sur>=0?'+':''}${fmt(sur)}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:4px">較上月 ${diff>=0?'↑':'↓'} ${fmt(Math.abs(diff))}</div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <div style="background:rgba(255,255,255,.2);border-radius:99px;padding:4px 10px;font-size:11px;color:#fff;display:flex;align-items:center;gap:4px"><span>💰</span>收入 ${fmt(inc)}</div>
+          <div style="background:rgba(255,255,255,.2);border-radius:99px;padding:4px 10px;font-size:11px;color:#fff;display:flex;align-items:center;gap:4px"><span>📤</span>支出 ${fmt(exp)}</div>
+        </div>
       </div>
-      <div style="display:flex;gap:10px">
-        <span class="ring-legend"><span class="ring-dot" style="background:var(--green)"></span>收入</span>
-        <span class="ring-legend"><span class="ring-dot" style="background:var(--red)"></span>支出</span>
-      </div>
-      ${diffHTML}${overHTML}
+      <svg width="72" height="72" viewBox="0 0 72 72" style="flex-shrink:0">${ringPath}</svg>
     </div>
   </div>`;
 }
 window.renderSummaryCard=renderSummaryCard;
 
 window.renderOverview=function(){
-  if(!window.members.length||!window.cats.length) return; // 等資料載入
+  if(!window.members.length||!window.cats.length) return;
   const ym=ymKey(curMonth);
   ensureMonthBudget(ym);
   const allRecs=getMonthRecs('all');
@@ -829,182 +805,190 @@ window.renderOverview=function(){
   const totalSur=totalInc-totalExp;
   const totalBud=window.members.reduce((s,m)=>s+getMemberMonthBudget(ym,m.id),0);
 
-  /* 預算超支警示 */
+  // 警示
   const overMems=window.members.filter(m=>{const inc=mIncome(m.id),bud=getMemberMonthBudget(ym,m.id);return inc>0&&bud>inc;});
   document.getElementById('ov_alert').innerHTML=overMems.length
     ?`<div class="al alw"><span class="ali">⚠️</span><div>${overMems.map(m=>`${m.avatar} ${m.name} 預算超出收入 ${fmt(getMemberMonthBudget(ym,m.id)-mIncome(m.id))}`).join('、')}</div></div>`:'';
 
-  /* 切換按鈕 */
-  const toggleHTML=`<div class="view-toggle">
+  // 視角切換
+  const toggleHTML=`<div class="view-toggle" style="margin-bottom:12px">
     <button class="view-toggle-btn ${ovView==='personal'?'on':''}" onclick="setOvView('personal')">👤 個人</button>
     <button class="view-toggle-btn ${ovView==='family'?'on':''}" onclick="setOvView('family')">🏠 家庭</button>
   </div>`;
 
   if(ovView==='personal'){
-    /* ── 個人視角：各成員獨立卡片含明細 ── */
-    const memberHTML=window.members.map((m,mi)=>{
+    // ── 成員 Bento 卡（橫排）──
+    const memCards=window.members.map((m,mi)=>{
       const recs=getMonthRecs(m.id);
       const inc=recs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
       const exp=recs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
-      const bud=getMemberMonthBudget(ym,m.id), sur=inc-exp;
+      const bud=getMemberMonthBudget(ym,m.id);
       const familyShareAmt=getMemberFamilyShare(ym,m.id);
+      const sur=inc-exp;
       const color=MCOLS[mi%MCOLS.length];
-      const catSpent={};
-      recs.filter(r=>r.type==='expense').forEach(r=>{catSpent[r.category]=(catSpent[r.category]||0)+r.amount;});
-
-      const renderGroup=(groupCats,groupLabel,badgeCls)=>{
-        const active=groupCats.filter(c=>getBudget(ym,c.id,m.id)>0||catSpent[c.name]);
-        if(!active.length) return '';
-        const cards=active.map(c=>{
-          const isFamily=getCatMode(c)==='family';
-          const spent=isFamily
-            ? getMonthRecs('all').filter(r=>r.type==='expense'&&r.category===c.name).reduce((s,r)=>s+r.amount,0)
-            : (catSpent[c.name]||0);
-          const bgt=isFamily?getFamilyBudget(ym,c.id):getBudget(ym,c.id,m.id);
-          const pct=bgt>0?Math.min(spent/bgt*100,100):0;
-          const over=bgt>0&&spent>bgt;
-          const atLimit=bgt>0&&spent===bgt;
-          const bc=over?'var(--red)':pct>80?'var(--amber)':color;
-          const remainTxt=bgt>0?(over?`<span style="color:var(--red)">超 ${fmt(Math.abs(bgt-spent))}</span>`
-            :(atLimit?`<span style="color:var(--amber)">已達上限</span>`
-            :`<span style="color:var(--text3)">餘 ${fmt(bgt-spent)}</span>`))
-            :`<span style="color:var(--text3)">未設預算</span>`;
-          const hintTxt=daysHintHTML(spent,bgt,c.id);
-          return `<div class="cat-big-card${over?' over':''}">
-            <span class="cat-big-icon">${c.icon}</span>
-            <div class="cat-big-name">${c.name}${trendHTML(spent,c.name)}</div>
-            <div class="cat-big-amt">${fmt(spent)}</div>
-            <div class="cat-big-bar"><div class="cat-big-fill" style="width:${pct}%;background:${bc}"></div></div>
-            <div class="cat-big-remain">${remainTxt}</div>
-            ${hintTxt}
-          </div>`;
-        }).join('');
-        return `<div style="margin-bottom:14px">
-          <div style="margin-bottom:8px"><span class="badge ${badgeCls}">${groupLabel}</span></div>
-          <div class="cat-grid">${cards}</div>
-        </div>`;
-      };
-
-      const budPct=bud>0&&inc>0?Math.min(exp/bud*100,100):0;
-      const budColor=bud>inc&&inc>0?'var(--red)':budPct>85?'var(--amber)':color;
-      const fixedHTML=renderGroup(fixedCats(window.cats),'固定支出','badge-fixed');
-      const varHTML=renderGroup(varCats(window.cats),'不固定支出','badge-var');
-      const hasAny=fixedHTML||varHTML;
-
-      return `<div class="card card-accent" style="border-left-color:${color}">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-          <div style="width:44px;height:44px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${m.avatar}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:15px;font-weight:500;margin-bottom:5px;color:var(--text)">${m.name}</div>
-            <div style="display:flex;gap:14px;font-size:12px;flex-wrap:wrap">
-              <span style="color:var(--green)">收入 ${fmt(inc)}</span>
-              <span style="color:var(--red)">支出 ${fmt(exp)}</span>
-              <span style="color:${sur>=0?'var(--green)':'var(--red)'};font-weight:500">${sur>=0?'盈餘':'虧損'} ${fmt(Math.abs(sur))}</span>
-            </div>
-          </div>
+      const budPct=bud>0?Math.min(exp/bud*100,100):0;
+      const budColor=exp>bud&&bud>0?'var(--red)':budPct>85?'var(--amber)':color;
+      const bgCls=mi===0?'bcard-lavender':'bcard-mint';
+      return `<div class="bcard ${bgCls}" style="position:relative;overflow:hidden">
+        <div style="position:absolute;right:-8px;bottom:-8px;font-size:48px;opacity:.13;line-height:1;pointer-events:none">${m.avatar}</div>
+        <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:3px">${m.name}</div>
+        <div style="font-size:19px;font-weight:700;color:${color};letter-spacing:-.4px">${fmt(inc)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:1px">本月收入</div>
+        <div style="height:4px;background:rgba(0,0,0,.07);border-radius:99px;overflow:hidden;margin-top:8px">
+          <div style="height:4px;border-radius:99px;width:${budPct}%;background:${budColor};transition:width .4s ease"></div>
         </div>
-        ${bud>0?`<div style="margin-bottom:14px;padding:10px 12px;background:var(--surface2);border-radius:8px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-            <span style="font-size:11px;color:var(--text2)">預算 ${fmt(exp)} / ${fmt(bud)}${familyShareAmt>0?` <span style="color:var(--purple)">（含家庭分攤 ${fmt(familyShareAmt)}）</span>`:''}</span>
-            <span style="font-size:11px;font-weight:500;color:${budColor}">${Math.round(exp/(bud||1)*100)}%</span>
-          </div>
-          <div class="pw"><div class="pb" style="width:${budPct}%;background:${budColor}"></div></div>
-        </div>`:''}
-        ${hasAny?fixedHTML+varHTML:`<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px 0">本月無支出記錄</div>`}
+        <div style="display:inline-block;font-size:9px;padding:3px 8px;border-radius:99px;font-weight:600;margin-top:6px;background:rgba(0,0,0,.06);color:${sur>=0?'var(--green)':'var(--red)'}">${sur>=0?'盈餘':'虧損'} ${fmt(Math.abs(sur))}</div>
       </div>`;
     }).join('');
 
-    document.getElementById('ov_body').innerHTML=toggleHTML+memberHTML;
+    // ── 各成員展開卡片（含分類）──
+    const memberCards=window.members.map((m,mi)=>{
+      const recs=getMonthRecs(m.id);
+      const inc=recs.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+      const exp=recs.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+      const bud=getMemberMonthBudget(ym,m.id);
+      const familyShareAmt=getMemberFamilyShare(ym,m.id);
+      const sur=inc-exp;
+      const color=MCOLS[mi%MCOLS.length];
+      const budPct=bud>0?Math.min(exp/bud*100,100):0;
+      const budColor=exp>bud&&bud>0?'var(--red)':budPct>85?'var(--amber)':color;
+      const catSpent={};
+      recs.filter(r=>r.type==='expense').forEach(r=>{catSpent[r.category]=(catSpent[r.category]||0)+r.amount;});
+
+      // 分類列表（橫條進度）
+      const allActive=sortedCats(window.cats).filter(c=>{
+        const isFamily=getCatMode(c)==='family';
+        const bgt=isFamily?getFamilyBudget(ym,c.id):getBudget(ym,c.id,m.id);
+        const spent=isFamily?allRecs.filter(r=>r.type==='expense'&&r.category===c.name).reduce((s,r)=>s+r.amount,0):(catSpent[c.name]||0);
+        return bgt>0||spent>0;
+      });
+
+      const catRows=allActive.map(c=>{
+        const isFamily=getCatMode(c)==='family';
+        const spent=isFamily?allRecs.filter(r=>r.type==='expense'&&r.category===c.name).reduce((s,r)=>s+r.amount,0):(catSpent[c.name]||0);
+        const bgt=isFamily?getFamilyBudget(ym,c.id):getBudget(ym,c.id,m.id);
+        const pct=bgt>0?Math.min(spent/bgt*100,100):0;
+        const over=bgt>0&&spent>bgt;
+        const atLimit=bgt>0&&spent===bgt;
+        const bc=over?'var(--red)':pct>80?'var(--amber)':color;
+        const rightTxt=over?`<span style="color:var(--red);font-weight:600">超 ${fmt(Math.abs(bgt-spent))}</span>`
+          :atLimit?`<span style="color:var(--amber)">已達上限</span>`
+          :bgt>0?`<span style="color:var(--text3)">NT$${Math.round(spent).toLocaleString()} / ${Math.round(bgt).toLocaleString()}</span>`
+          :`<span style="color:var(--text3)">${fmt(spent)}</span>`;
+        return `<div style="margin-bottom:9px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text)">
+              <span>${c.icon}</span>${c.name}
+              ${isFamily?`<span style="font-size:8px;padding:1px 5px;border-radius:99px;background:var(--purple);color:#fff">家庭</span>`:''}
+              ${trendHTML(spent,c.name)}
+            </div>
+            <div style="font-size:11px">${rightTxt}</div>
+          </div>
+          ${bgt>0?`<div style="height:4px;background:rgba(0,0,0,.07);border-radius:99px;overflow:hidden">
+            <div style="height:4px;border-radius:99px;width:${pct}%;background:${bc};transition:width .4s ease"></div>
+          </div>`:''}
+          ${daysHintHTML(spent,bgt,c.id)}
+        </div>`;
+      }).join('');
+
+      return `<div class="card card-accent" style="border-left-color:${color};margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:44px;height:44px;border-radius:50%;background:${color}20;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${m.avatar}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:3px">${m.name}</div>
+            <div style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap">
+              <span style="color:var(--green)">收入 ${fmt(inc)}</span>
+              <span style="color:var(--red)">支出 ${fmt(exp)}</span>
+              <span style="color:${sur>=0?'var(--green)':'var(--red)'};font-weight:600">${sur>=0?'盈餘':'虧損'} ${fmt(Math.abs(sur))}</span>
+            </div>
+          </div>
+        </div>
+        ${bud>0?`<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--text2)">預算 ${fmt(exp)} / ${fmt(bud)}${familyShareAmt>0?`<span style="color:var(--purple)"> (含家庭分攤 ${fmt(familyShareAmt)})</span>`:''}</span>
+            <span style="font-size:12px;font-weight:700;color:${budColor}">${Math.round(exp/(bud||1)*100)}%</span>
+          </div>
+          <div style="height:5px;background:rgba(0,0,0,.07);border-radius:99px;overflow:hidden">
+            <div style="height:5px;border-radius:99px;width:${budPct}%;background:${budColor};transition:width .4s ease"></div>
+          </div>
+        </div>`:''}
+        ${catRows||`<div style="font-size:12px;color:var(--text3);text-align:center;padding:6px 0">本月無支出記錄</div>`}
+      </div>`;
+    }).join('');
+
+    document.getElementById('ov_body').innerHTML=
+      `<div class="bento" style="margin-bottom:12px">${memCards}</div>`
+      +toggleHTML+memberCards;
 
   } else {
-    /* ── 家庭視角：分類合計進度 + 成員總額 ── */
-
-    /* 全家摘要數字 */
+    // ── 家庭視角 ──
     const budPct=totalBud>0?Math.min(totalExp/totalBud*100,100):0;
     const budColor=totalExp>totalBud&&totalBud>0?'var(--red)':budPct>85?'var(--amber)':'var(--green)';
-
-    const summaryHTML=`
-      <div class="sgrid" style="margin-bottom:1rem">
-        <div class="met"><div class="ml">家庭總收入</div><div class="mv g">${fmt(totalInc)}</div></div>
-        <div class="met"><div class="ml">家庭總支出</div><div class="mv r">${fmt(totalExp)}</div></div>
-        <div class="met"><div class="ml">預算總額</div><div class="mv b">${fmt(totalBud)}</div></div>
-        <div class="met"><div class="ml">${totalSur>=0?'家庭盈餘':'家庭虧損'}</div><div class="mv ${totalSur>=0?'g':'r'}">${fmt(Math.abs(totalSur))}</div></div>
-      </div>
-      <div style="padding:12px 14px;background:var(--surface2);border-radius:var(--radius);margin-bottom:1.25rem">
-        <div style="display:flex;justify-content:space-between;margin-bottom:7px">
-          <span style="font-size:12px;color:var(--text2)">預算整體使用進度</span>
-          <span style="font-size:13px;font-weight:500;color:${budColor}">${fmt(totalExp)} / ${fmt(totalBud)} (${totalBud>0?Math.round(totalExp/totalBud*100):0}%)</span>
-        </div>
-        <div class="btrack"><div class="bfill" style="width:${budPct}%;background:${budColor}"></div></div>
-      </div>`;
-
-    /* 各分類合計 */
     const allCatSpent={};
     allRecs.filter(r=>r.type==='expense').forEach(r=>{allCatSpent[r.category]=(allCatSpent[r.category]||0)+r.amount;});
 
-    const renderFamilyGroup=(groupCats,groupLabel,badgeCls)=>{
-      const active=groupCats.filter(c=>{
-        const totalBgtCat=window.members.reduce((s,m)=>s+getBudget(ym,c.id,m.id),0);
-        return totalBgtCat>0||(allCatSpent[c.name]||0)>0;
-      });
-      if(!active.length) return '';
-      const rows=active.map(c=>{
-        const spent=allCatSpent[c.name]||0;
-        const bgt=window.members.reduce((s,m)=>s+getBudget(ym,c.id,m.id),0);
-        const pct=bgt>0?Math.min(spent/bgt*100,100):0;
-        const over=bgt>0&&spent>bgt;
-        const bc=over?'var(--red)':pct>80?'var(--amber)':'var(--blue)';
-        return `<div class="family-cat-row">
-          <span style="font-size:20px;width:26px;text-align:center;flex-shrink:0">${c.icon}</span>
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
-              <span style="font-size:14px;color:var(--text)">${c.name}</span>
-              <span style="font-size:12px;color:${over?'var(--red)':'var(--text2)'}">
-                ${bgt>0?(over?'超支 '+fmt(Math.abs(bgt-spent)):'餘 '+fmt(bgt-spent)):''}
-              </span>
-            </div>
-            <div class="pw" style="height:6px"><div class="pb" style="height:6px;width:${pct}%;background:${bc}"></div></div>
-            <div style="display:flex;justify-content:space-between;margin-top:4px">
-              <span style="font-size:11px;color:var(--text3)">支出 ${fmt(spent)}</span>
-              ${bgt>0?`<span style="font-size:11px;color:var(--text3)">預算 ${fmt(bgt)}</span>`:'<span style="font-size:11px;color:var(--text3)">未設預算</span>'}
-            </div>
-          </div>
-        </div>`;
-      }).join('');
-      return `<div style="margin-bottom:1.25rem">
-        <div class="sh-row" style="margin-top:0"><span class="sh">${groupLabel}</span><span class="badge ${badgeCls}">${active.length} 項</span></div>
-        ${rows}
+    const summaryHTML=`
+      <div class="bento" style="margin-bottom:10px">
+        <div class="bcard bcard-cream"><div class="bc-label">家庭收入</div><div class="bc-val grn" style="font-size:18px">${fmt(totalInc)}</div></div>
+        <div class="bcard bcard-rose"><div class="bc-label">家庭支出</div><div class="bc-val red" style="font-size:18px">${fmt(totalExp)}</div></div>
+      </div>
+      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:11px 13px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:12px;color:var(--text2)">預算整體進度</span>
+          <span style="font-size:13px;font-weight:700;color:${budColor}">${fmt(totalExp)} / ${fmt(totalBud)}</span>
+        </div>
+        <div style="height:6px;background:rgba(0,0,0,.07);border-radius:99px;overflow:hidden">
+          <div style="height:6px;border-radius:99px;width:${budPct}%;background:${budColor};transition:width .4s ease"></div>
+        </div>
       </div>`;
-    };
 
-    const fcHTML=renderFamilyGroup(fixedCats(window.cats),'固定支出','badge-fixed');
-    const vcHTML=renderFamilyGroup(varCats(window.cats),'不固定支出','badge-var');
-
-    /* 各成員支出總額（不含明細） */
-    const memberSummary=`
-      <hr class="divider">
-      <div class="sh">成員支出總覽</div>
-      ${window.members.map((m,mi)=>{
-        const mExp=getMonthRecs(m.id).filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
-        const mBud=getMemberMonthBudget(ym,m.id);
-        const mPct=mBud>0?Math.min(mExp/mBud*100,100):0;
-        const color=MCOLS[mi%MCOLS.length];
-        const mColor=mExp>mBud&&mBud>0?'var(--red)':mPct>85?'var(--amber)':color;
-        return `<div class="member-exp-row">
-          <div style="width:36px;height:36px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${m.avatar}</div>
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-              <span style="font-size:13px;font-weight:500;color:var(--text)">${m.name}</span>
-              <span style="font-size:13px;color:var(--red)">${fmt(mExp)}</span>
-            </div>
-            ${mBud>0?`<div class="pw" style="height:4px"><div class="pb" style="height:4px;width:${mPct}%;background:${mColor}"></div></div>
-            <div style="font-size:10px;color:var(--text3);margin-top:3px">預算 ${fmt(mBud)} · 使用 ${Math.round(mExp/(mBud||1)*100)}%</div>`
-            :'<div style="font-size:10px;color:var(--text3)">未設預算</div>'}
+    const catRowsHTML=sortedCats(window.cats).filter(c=>{
+      const isFamily=getCatMode(c)==='family';
+      const bgt=isFamily?getFamilyBudget(ym,c.id):window.members.reduce((s,m)=>s+getBudget(ym,c.id,m.id),0);
+      return bgt>0||(allCatSpent[c.name]||0)>0;
+    }).map(c=>{
+      const isFamily=getCatMode(c)==='family';
+      const spent=allCatSpent[c.name]||0;
+      const bgt=isFamily?getFamilyBudget(ym,c.id):window.members.reduce((s,m)=>s+getBudget(ym,c.id,m.id),0);
+      const pct=bgt>0?Math.min(spent/bgt*100,100):0;
+      const over=bgt>0&&spent>bgt;
+      const bc=over?'var(--red)':pct>80?'var(--amber)':'var(--purple)';
+      return `<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text)">
+            <span>${c.icon}</span>${c.name}
+            ${isFamily?`<span style="font-size:8px;padding:1px 5px;border-radius:99px;background:var(--purple);color:#fff">家庭</span>`:''}
           </div>
-        </div>`;
-      }).join('')}`;
+          <span style="font-size:11px;color:${over?'var(--red)':'var(--text3)'}">${bgt>0?(over?`超 ${fmt(Math.abs(bgt-spent))}`:fmt(spent)+' / '+fmt(bgt)):fmt(spent)}</span>
+        </div>
+        <div style="height:4px;background:rgba(0,0,0,.07);border-radius:99px;overflow:hidden">
+          <div style="height:4px;border-radius:99px;width:${pct}%;background:${bc}"></div>
+        </div>
+      </div>`;
+    }).join('');
 
-    document.getElementById('ov_body').innerHTML=toggleHTML+summaryHTML+fcHTML+vcHTML+memberSummary;
+    const memSummary=window.members.map((m,mi)=>{
+      const mExp=getMonthRecs(m.id).filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+      const mBud=getMemberMonthBudget(ym,m.id);
+      const mPct=mBud>0?Math.min(mExp/mBud*100,100):0;
+      const color=MCOLS[mi%MCOLS.length];
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border)">
+        <div style="width:36px;height:36px;border-radius:50%;background:${color}20;display:flex;align-items:center;justify-content:center;font-size:18px">${m.avatar}</div>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:13px;font-weight:600;color:var(--text)">${m.name}</span>
+            <span style="font-size:13px;color:var(--red);font-weight:600">${fmt(mExp)}</span>
+          </div>
+          ${mBud>0?`<div style="height:4px;background:rgba(0,0,0,.07);border-radius:99px;overflow:hidden">
+            <div style="height:4px;border-radius:99px;width:${mPct}%;background:${color}"></div>
+          </div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('ov_body').innerHTML=toggleHTML+summaryHTML
+      +`<div class="card" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font-size:13px;font-weight:700;color:var(--text)">支出分類</span><span style="font-size:10px;padding:2px 8px;border-radius:99px;background:var(--orange-bg);color:var(--orange-text);font-weight:600">本月</span></div>${catRowsHTML}</div>`
+      +`<div class="card"><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">成員支出總覽</div>${memSummary}</div>`;
   }
 };
 
